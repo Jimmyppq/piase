@@ -4,7 +4,7 @@ import logging
 import os
 
 def setup_logging():
-    logging.basicConfig(filename='/Users/jimmy/Library/CloudStorage/OneDrive-LatiniaInteractiveBusiness,S.A/Jimmy/utiles/Python/piase/logs/consolidationpruebaDavid.log',
+    logging.basicConfig(filename='/Users/jimmy/Library/CloudStorage/OneDrive-LatiniaInteractiveBusiness,S.A/Jimmy/utiles/Python/piase/logs/consolidation21102023.log',
                         level=logging.INFO,
                         format='%(asctime)s - %(levelname)s - %(message)s')
     logging.info('--- Starting script ---')
@@ -22,8 +22,6 @@ def get_first_last_dates(group):
     last_date = group.iloc[-1]['date_max']
     last_action = group.iloc[-1]['last_action']
     last_subcomponent = group.iloc[-1]['last_subcomponent']
-
-
     
     if 'NEWTRANS' in group['first_action'].values:
         first_action_row = group[group['first_action'] == 'NEWTRANS'].iloc[0]
@@ -38,8 +36,7 @@ def get_first_last_dates(group):
         first_action = first_action_row['first_action']
         first_subcomponent = first_action_row['first_subcomponent']
         first_priority = first_action_row['priority']
-
-        
+      
 
     if 'SEND' in group['last_action'].values:
         last_action_row = group[group['last_action'] == 'SEND'].iloc[-1]
@@ -115,8 +112,8 @@ if __name__ == "__main__":
     # Inicializa el contador
     get_first_last_dates.count = 0
     
-    input_file_path = "/Users/jimmy/Library/CloudStorage/OneDrive-LatiniaInteractiveBusiness,S.A/Jimmy/utiles/Python/piase/output/result_prueba14sept.csv"
-    output_file_path = "/Users/jimmy/Library/CloudStorage/OneDrive-LatiniaInteractiveBusiness,S.A/Jimmy/utiles/Python/piase/output/consolidate_prueba14sept.csv"
+    input_file_path = "/Users/jimmy/Library/CloudStorage/OneDrive-LatiniaInteractiveBusiness,S.A/Jimmy/utiles/Python/piase/output/result_BCI_2908.csv"
+    output_file_path = "/Users/jimmy/Library/CloudStorage/OneDrive-LatiniaInteractiveBusiness,S.A/Jimmy/utiles/Python/piase/output/consolidate21102023.csv"
     if not os.path.exists(input_file_path):
         logging.error(f"El archivo {input_file_path} no existe. Terminando la ejecución.")
         exit(1)
