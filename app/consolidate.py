@@ -1,7 +1,7 @@
 import pandas as pd
-from datetime import datetime
 import logging
 import os
+
 
 def setup_logging():
     logging.basicConfig(filename='/Users/jimmy/Library/CloudStorage/OneDrive-LatiniaInteractiveBusiness,S.A/Jimmy/utiles/Python/piase/logs/consolidation21102023.log',
@@ -62,8 +62,7 @@ def get_first_last_dates(group):
     # Si el contador es múltiplo de 50000, escribe en el log
     if get_first_last_dates.count % 50000 == 0:
         logging.info(f'Ha terminado de procesar {get_first_last_dates.count} transacciones...')  
-        
-
+   
     return pd.Series({
         'date_min': first_date,
         'date_max': last_date,
@@ -71,7 +70,7 @@ def get_first_last_dates(group):
         'first_action': first_action,
         'first_subcomponent': first_subcomponent,
         'last_action': last_action,
-        'last_subcomponent': last_subcomponent,
+        'last_subcomponent': last_subcomponent, 
         'Duration': duration
     })
 
@@ -81,17 +80,19 @@ def process_csv(input_file, output_file):
     logging.info(f'Finished reading input file: {input_file}')
     #data['date_min'] = pd.to_datetime(data['date_min'])
     #data['date_max'] = pd.to_datetime(data['date_max'])
-    
-    data['date_min'] = pd.to_datetime(data['date_min'], format='mixed')
-    data['date_max'] = pd.to_datetime(data['date_max'], format='mixed')
-
-    
-
-    data_sorted = data.sort_values(by=['Transaction ID', 'date_min'])
-    logging.info('Sorting done...')
-    #print (data_sorted)
-    consolidated_data = data_sorted.groupby('Transaction ID').apply(get_first_last_dates).reset_index()
-    logging.info('Groupby done...')
+    blocknumber = 1
+    chunk_size = 5  # Elige un tamaño de lote adecuado
+    chunks = pd.read_csv(input_file, chunksize=chunk_size)
+    for chunk in chunks:
+        data['date_min'] = pd.to_datetime(data['date_min'], format='mixed')
+        data['date_max'] = pd.to_datetime(data['date_max'], format='mixed')
+        data_sorted = data.sort_values(by=['Transaction ID', 'date_min'])
+        logging.info(f'Sorting done, blockID: {blocknumber}')        
+        consolidated_data = data_sorted.groupby('Transaction ID').apply(get_first_last_dates).reset_index()            
+        logging.info(f'Groupby done. blockID: {blocknumber}')
+        blocknumber +=1
+        
+        
     #print(consolidated_data)
     '''
     escape_mapping = {
@@ -112,8 +113,8 @@ if __name__ == "__main__":
     # Inicializa el contador
     get_first_last_dates.count = 0
     
-    input_file_path = "/Users/jimmy/Library/CloudStorage/OneDrive-LatiniaInteractiveBusiness,S.A/Jimmy/utiles/Python/piase/output/result_BCI_2908.csv"
-    output_file_path = "/Users/jimmy/Library/CloudStorage/OneDrive-LatiniaInteractiveBusiness,S.A/Jimmy/utiles/Python/piase/output/consolidate21102023.csv"
+    input_file_path = "/Users/jimmy/Library/CloudStorage/OneDrive-LatiniaInteractiveBusiness,S.A/Jimmy/utiles/Python/piase/output/result_test21102023.csv"
+    output_file_path = "/Users/jimmy/Library/CloudStorage/OneDrive-LatiniaInteractiveBusiness,S.A/Jimmy/utiles/Python/piase/output/consolidate_test_21102023.csv"
     if not os.path.exists(input_file_path):
         logging.error(f"El archivo {input_file_path} no existe. Terminando la ejecución.")
         exit(1)
