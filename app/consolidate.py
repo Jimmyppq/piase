@@ -76,22 +76,22 @@ def get_first_last_dates(group):
 
 def process_csv(input_file, output_file):
     logging.info('Starting processing...')
-    data = pd.read_csv(input_file)
-    logging.info(f'Finished reading input file: {input_file}')
+    #data = pd.read_csv(input_file)    
     #data['date_min'] = pd.to_datetime(data['date_min'])
     #data['date_max'] = pd.to_datetime(data['date_max'])
     blocknumber = 1
     chunk_size = 5  # Elige un tamaño de lote adecuado
     chunks = pd.read_csv(input_file, chunksize=chunk_size)
     for chunk in chunks:
-        data['date_min'] = pd.to_datetime(data['date_min'], format='mixed')
-        data['date_max'] = pd.to_datetime(data['date_max'], format='mixed')
-        data_sorted = data.sort_values(by=['Transaction ID', 'date_min'])
+        chunk['date_min'] = pd.to_datetime(chunk['date_min'], format='mixed')
+        chunk['date_max'] = pd.to_datetime(chunk['date_max'], format='mixed')
+        data_sorted = chunk.sort_values(by=['Transaction ID', 'date_min'])
         logging.info(f'Sorting done, blockID: {blocknumber}')        
         consolidated_data = data_sorted.groupby('Transaction ID').apply(get_first_last_dates).reset_index()            
         logging.info(f'Groupby done. blockID: {blocknumber}')
         blocknumber +=1
         
+    logging.info(f'Finished reading input file: {input_file}')    
         
     #print(consolidated_data)
     '''
