@@ -1,6 +1,7 @@
 import pandas as pd
 import logging
 import os
+import time
 
 
 def setup_logging():
@@ -89,8 +90,13 @@ def process_csv(input_file, output_file):
         logging.info(f'Sorting done, blockID: {blocknumber}')        
         consolidated_data = data_sorted.groupby('Transaction ID').apply(get_first_last_dates).reset_index()            
         logging.info(f'Groupby done. blockID: {blocknumber}')
-        blocknumber +=1
-        
+        blocknumber +=1        
+        #consolidated_data.to_csv(output_file, index=False)
+        # Abre el archivo en modo de apendizaje ('a') en lugar de escritura ('w')
+        with open(output_file, 'a') as f:
+            # Utiliza el método to_csv, pero también pasa el objeto de archivo 'f'
+            consolidated_data.to_csv(f, index=False, header=f.tell()==0)  # Añade el encabezado solo si el archivo está vacío
+            
     logging.info(f'Finished reading input file: {input_file}')    
         
     #print(consolidated_data)
@@ -105,7 +111,7 @@ def process_csv(input_file, output_file):
     for char, replacement in escape_mapping.items():
         consolidated_data['Transaction ID'] = consolidated_data['Transaction ID'].str.replace(char, replacement)
     '''
-    consolidated_data.to_csv(output_file, index=False)
+    #consolidated_data.to_csv(output_file, index=False)
     logging.info('Processing completed.')
 
 if __name__ == "__main__":
