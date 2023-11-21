@@ -167,7 +167,8 @@ def process_log_file(file_path):
                         
             if Mtransaction_id is not None :
                 transactions[Mtransaction_id] = transaction
-                transactions.pop(transaction_id, None)               
+                transactions.pop(transaction_id, None)
+                transaction = transactions[Mtransaction_id]         
 
 
             # Update date_min, first_action, and first_subcomponent if NEWTRANS
