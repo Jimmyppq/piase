@@ -8,10 +8,10 @@ import time
 
 def setup_logging():
 
-    logging.basicConfig(filename='/Users/jimmy/Library/CloudStorage/OneDrive-LatiniaInteractiveBusiness,S.A/Jimmy/utiles/Python/piase/logs/logBAC.log', level=logging.INFO,
-                        format='%(asctime)s - %(levelname)s - %(message)s')
-    #logging.basicConfig(filename='/home/scriptPython/Ver_2/piase/logs/logDuration.log', level=logging.INFO,
+    #logging.basicConfig(filename='/Users/jimmy/Library/CloudStorage/OneDrive-LatiniaInteractiveBusiness,S.A/Jimmy/utiles/Python/piase/logs/logBAC.log', level=logging.INFO,
     #                    format='%(asctime)s - %(levelname)s - %(message)s')
+    logging.basicConfig(filename='/Users/colombia-01/OneDrive - Latinia Interactive Business, S.A/Jimmy/utiles/Python/piase/logs/log20112023.log', level=logging.INFO,
+                        format='%(asctime)s - %(levelname)s - %(message)s')
     logging.info('--- Starting script ---')
 
 def process_log_line(line):
@@ -37,7 +37,8 @@ def process_log_line(line):
    
     # Regular expression for finding transaction ID and priority
     #transaction_pattern = r"transaction:([^ ]*)"
-    transaction_pattern = r"(transaction:|event:)([^ ]*)"
+    transaction_pattern = r"(transaction:)([^ ]*)"
+    #transaction_pattern = r"(transaction:|event:)([^ ]*)"
     priority_pattern = r"pri:(\d+)"
     
     # Parse the log line
@@ -48,11 +49,22 @@ def process_log_line(line):
         details = match.groupdict()
         
         # Find transaction ID if present
-        transaction_match = re.search(transaction_pattern, details['details'])
-        if transaction_match:
-            details['transaction_id'] = transaction_match.group(2)
+        #transaction_match = re.search(transaction_pattern, details['details'])
+        transaction_matches = re.finditer(transaction_pattern, details['details'])
+        transaction_ids = []
+        for transaction_match in transaction_matches:
+            transaction_id = transaction_match.group(2)
+            transaction_ids.append(transaction_id)
+            
+        if len(transaction_ids) >= 1:
+            details['transaction_id'] = transaction_ids[0]
         else:
-            details['transaction_id'] = None
+            details['transaction_id'] = None 
+        
+        if len(transaction_ids) >= 2:
+            details['Mtransaction_id'] = transaction_ids[1]
+        else:
+            details['Mtransaction_id'] = None
         
         # Find priority if present
         priority_match = re.search(priority_pattern, details['details'])
@@ -94,7 +106,7 @@ def process_log_file(file_path):
     
     # Registra la velocidad de lectura en el archivo de registro o donde desees
     #print(f"File: {file_path}, Read Speed (MB/s): {read_speed_mb_per_sec}\n")
-    with open('./logs/read_speed.log', 'a') as log_file:
+    with open('../logs/read_speed.log', 'a') as log_file:
         log_file.write(f"File: {file_path}, Read Speed (MB/s): {read_speed_mb_per_sec}\n")
        
     # Process each log line and store the results in a list
@@ -110,18 +122,14 @@ def process_log_file(file_path):
     df = pd.DataFrame(valid_log_data)
     if df.empty:
         print("El DataFrame está vacío! Revise la expresión regular")
-        #print (log_data)
         exit()
-    
-    #print(df.head())
 
     # Drop rows without transaction_id
     df = df.dropna(subset=['transaction_id'])
 
     # Sort DataFrame by timestamp
     df = df.sort_values('timestamp')
-  
-
+    
     # Define a dictionary to store transaction details
     transactions = {}
 
@@ -133,8 +141,11 @@ def process_log_file(file_path):
         action = row['action']
         subcomponent = row['subcomponent']
         priority = row['priority']
+        Mtransaction_id = row['Mtransaction_id']
         
-        #print(f"TransactionId:{transaction_id} - Action:{action} - Timestamp:{timestamp}")
+                      
+        
+        #print(f"TransactionId:{transaction_id} - Action:{action} - Timestamp:{timestamp} - Mtransaction_id: {Mtransaction_id}")
 
         # Update transaction details
         if transaction_id not in transactions:
@@ -152,11 +163,17 @@ def process_log_file(file_path):
             }                  
         else:
             # If the transaction is in the dictionary, update it
-            transaction = transactions[transaction_id]
-            #print (f"Transaction: {transaction_id}, action: {action}")
+            
+                        
+            if Mtransaction_id is not None :
+                transactions[Mtransaction_id] = transactions[transaction_id]
+                transactions.pop(transaction_id, None)
+            else:
+                transaction = transactions[transaction_id]
 
-            # Update date_min, first_action, and first_subcomponent if NEWTRANS or MNEWTRANS is encountered
-            if action in ['NEWTRANS', 'MNEWTRANS']:
+
+            # Update date_min, first_action, and first_subcomponent if NEWTRANS
+            if action == 'NEWTRANS' :
                 transaction['date_min'] = timestamp
                 transaction['first_action'] = action
                 transaction['first_action'] = action
@@ -180,6 +197,7 @@ def process_log_file(file_path):
     # Convert the dictionary to a DataFrame
     transactions_df = pd.DataFrame(transactions.values(), index=transactions.keys())
     transactions_df.index.name = 'Transaction ID'
+    
 
     # Calculate duration in seconds
     transactions_df['Duration'] = (transactions_df['date_max'] - transactions_df['date_min']).dt.total_seconds()
@@ -229,12 +247,18 @@ all_transactions_df = pd.DataFrame()
 # Process all log files in the given directory and its subdirectories that match the given pattern
 # Call the function with your directory path and file pattern
 #process_log_files("/mnt/NAS/BANORTE/259_LATSUP-2959_Monitoreo upselling 300TPS entorno Producción/2023-08-04 01 L01/F1", "*act*.log")
-process_log_files("/Users/jimmy/Data/OneDrive - Latinia Interactive Business, S.A/Jimmy/brrMac/BAC/Actividad", "*act*")
+#ofi
+#process_log_files("/Users/jimmy/Data/OneDrive - Latinia Interactive Business, S.A/Jimmy/brrMac/logsPrueba/", "*.log")
+#home
+process_log_files("/Users/colombia-01/OneDrive - Latinia Interactive Business, S.A/Jimmy/brrMac/logsPrueba/", "*.log")
 
 logging.info('Processing completed...')
 
 logging.info('Guardando resultado...')
 # Save the DataFrame to a CSV file
-all_transactions_df.to_csv("/Users/jimmy/Library/CloudStorage/OneDrive-LatiniaInteractiveBusiness,S.A/Jimmy/utiles/Python/piase/output/result_BAC_03102023.csv")
+#ofi
+#all_transactions_df.to_csv("/Users/jimmy/Library/CloudStorage/OneDrive-LatiniaInteractiveBusiness,S.A/Jimmy/utiles/Python/piase/output/result_prueba20112023.csv")
+#home
+all_transactions_df.to_csv("/Users/colombia-01/Library/CloudStorage/OneDrive-LatiniaInteractiveBusiness,S.A/Jimmy/utiles/Python/piase/output/result_prueba20112023_1.csv")
 #all_transactions_df.to_csv("/home/scriptPython/Ver_2/piase/output/result_Banorte_02102023_F1.csv")
 logging.info('Resultado almacenado')
