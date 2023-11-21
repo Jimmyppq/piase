@@ -163,13 +163,11 @@ def process_log_file(file_path):
             }                  
         else:
             # If the transaction is in the dictionary, update it
-            
+            transaction = transactions[transaction_id]
                         
             if Mtransaction_id is not None :
-                transactions[Mtransaction_id] = transactions[transaction_id]
-                transactions.pop(transaction_id, None)
-            else:
-                transaction = transactions[transaction_id]
+                transactions[Mtransaction_id] = transaction
+                transactions.pop(transaction_id, None)               
 
 
             # Update date_min, first_action, and first_subcomponent if NEWTRANS
@@ -194,10 +192,10 @@ def process_log_file(file_path):
             if action in ['SEND','REJECTED']:  
                 transaction['send'] = True
 
+
     # Convert the dictionary to a DataFrame
     transactions_df = pd.DataFrame(transactions.values(), index=transactions.keys())
-    transactions_df.index.name = 'Transaction ID'
-    
+    transactions_df.index.name = 'Transaction ID'    
 
     # Calculate duration in seconds
     transactions_df['Duration'] = (transactions_df['date_max'] - transactions_df['date_min']).dt.total_seconds()
