@@ -21,3 +21,8 @@ Cambios en "consolidate.py" Script:
 
 2. Manejo de Múltiples Transacciones: Introduce lógica para manejar transacciones marcadas con "SEND-ERR" en lugar de "SEND" en la función get_first_last_dates_ef(). 
    Esto garantiza un manejo más eficiente en ambos casos de acción.
+
+
+#############################################################
+
+                      FIN
