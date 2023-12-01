@@ -1,0 +1,480 @@
+2023-11-24 14:21:31,661 - INFO - --- Starting script ---
+2023-11-24 14:21:31,661 - INFO - Starting processing...
+2023-11-24 14:21:31,669 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-24 14:21:31,769 - INFO - Done...blockID: 1
+2023-11-24 14:22:27,794 - INFO - --- Starting script ---
+2023-11-24 14:22:27,795 - INFO - Starting processing...
+2023-11-24 14:22:27,797 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-24 14:22:27,813 - INFO - Done...blockID: 1
+2023-11-24 14:22:27,840 - INFO - Processing completed.
+2023-11-24 14:22:27,840 - INFO - --- Script finished ---
+2023-11-24 14:23:21,984 - INFO - --- Starting script ---
+2023-11-24 14:23:21,985 - INFO - Starting processing...
+2023-11-24 14:23:21,987 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-24 14:23:22,004 - INFO - Done...blockID: 1
+2023-11-24 14:23:22,007 - INFO - Processing completed.
+2023-11-24 14:23:22,008 - INFO - --- Script finished ---
+2023-11-24 14:26:26,984 - INFO - --- Starting script ---
+2023-11-24 14:26:26,984 - INFO - Starting processing...
+2023-11-24 14:26:26,986 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-24 14:29:30,562 - INFO - --- Starting script ---
+2023-11-24 14:29:30,562 - INFO - Starting processing...
+2023-11-24 14:29:30,564 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-24 14:39:11,724 - INFO - --- Starting script ---
+2023-11-24 14:39:11,724 - INFO - Starting processing...
+2023-11-24 14:39:11,726 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-24 14:39:58,615 - INFO - --- Starting script ---
+2023-11-24 14:39:58,615 - INFO - Starting processing...
+2023-11-24 14:39:58,617 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-24 14:39:58,634 - INFO - Done...blockID: 1
+2023-11-24 14:39:58,637 - INFO - Processing completed.
+2023-11-24 14:39:58,638 - INFO - --- Script finished ---
+2023-11-24 14:41:03,681 - INFO - --- Starting script ---
+2023-11-24 14:41:03,681 - INFO - Starting processing...
+2023-11-24 14:41:03,682 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-24 14:41:03,696 - INFO - Done...blockID: 1
+2023-11-24 14:41:03,698 - INFO - Processing completed.
+2023-11-24 14:41:03,698 - INFO - --- Script finished ---
+2023-11-24 14:41:12,348 - INFO - --- Starting script ---
+2023-11-24 14:41:12,348 - INFO - Starting processing...
+2023-11-24 14:41:12,349 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-24 14:41:12,361 - INFO - Done...blockID: 1
+2023-11-24 14:41:12,363 - INFO - Processing completed.
+2023-11-24 14:41:12,364 - INFO - --- Script finished ---
+2023-11-24 14:43:16,437 - INFO - --- Starting script ---
+2023-11-24 14:43:16,437 - INFO - Starting processing...
+2023-11-24 14:43:16,437 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-24 14:43:39,900 - INFO - --- Starting script ---
+2023-11-24 14:43:39,900 - INFO - Starting processing...
+2023-11-24 14:43:39,900 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-24 14:44:13,533 - INFO - --- Starting script ---
+2023-11-24 14:44:13,534 - INFO - Starting processing...
+2023-11-24 14:44:13,535 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-24 14:46:01,368 - INFO - --- Starting script ---
+2023-11-24 14:46:01,369 - INFO - Starting processing...
+2023-11-24 14:46:01,371 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-24 14:52:02,583 - INFO - --- Starting script ---
+2023-11-24 14:52:02,583 - INFO - Starting processing...
+2023-11-24 14:52:02,584 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-24 14:55:35,498 - INFO - --- Starting script ---
+2023-11-24 14:55:35,498 - INFO - Starting processing...
+2023-11-24 14:55:35,500 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-24 14:55:35,513 - INFO - Done...blockID: 1
+2023-11-24 14:55:35,517 - INFO - Processing completed.
+2023-11-24 14:55:35,517 - INFO - --- Script finished ---
+2023-11-24 14:56:57,055 - INFO - --- Starting script ---
+2023-11-24 14:56:57,055 - INFO - Starting processing...
+2023-11-24 14:56:57,056 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-24 14:57:47,542 - INFO - --- Starting script ---
+2023-11-24 14:57:47,542 - INFO - Starting processing...
+2023-11-24 14:57:47,543 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-24 14:58:20,973 - INFO - --- Starting script ---
+2023-11-24 14:58:20,974 - INFO - Starting processing...
+2023-11-24 14:58:20,975 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-24 14:59:03,818 - INFO - --- Starting script ---
+2023-11-24 14:59:03,818 - INFO - Starting processing...
+2023-11-24 14:59:03,819 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-24 14:59:12,554 - INFO - --- Starting script ---
+2023-11-24 14:59:12,555 - INFO - Starting processing...
+2023-11-24 14:59:12,556 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-24 14:59:19,716 - INFO - --- Starting script ---
+2023-11-24 14:59:19,716 - INFO - Starting processing...
+2023-11-24 14:59:19,718 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-24 14:59:46,264 - INFO - --- Starting script ---
+2023-11-24 14:59:46,264 - INFO - Starting processing...
+2023-11-24 14:59:46,265 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-24 15:00:04,079 - INFO - --- Starting script ---
+2023-11-24 15:00:04,079 - INFO - Starting processing...
+2023-11-24 15:00:04,081 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-24 15:00:18,178 - INFO - --- Starting script ---
+2023-11-24 15:00:18,178 - INFO - Starting processing...
+2023-11-24 15:00:18,179 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-24 15:00:35,510 - INFO - --- Starting script ---
+2023-11-24 15:00:35,511 - INFO - Starting processing...
+2023-11-24 15:00:35,512 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-24 15:00:48,460 - INFO - --- Starting script ---
+2023-11-24 15:00:48,460 - INFO - Starting processing...
+2023-11-24 15:00:48,463 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-24 15:02:16,505 - INFO - --- Starting script ---
+2023-11-24 15:02:16,505 - INFO - Starting processing...
+2023-11-24 15:02:16,509 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-24 15:02:48,884 - INFO - --- Starting script ---
+2023-11-24 15:02:48,884 - INFO - Starting processing...
+2023-11-24 15:02:48,886 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-24 15:03:07,082 - INFO - --- Starting script ---
+2023-11-24 15:03:07,082 - INFO - Starting processing...
+2023-11-24 15:03:07,083 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-24 15:03:56,207 - INFO - --- Starting script ---
+2023-11-24 15:03:56,207 - INFO - Starting processing...
+2023-11-24 15:03:56,208 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-24 15:08:01,984 - INFO - --- Starting script ---
+2023-11-24 15:08:01,984 - INFO - Starting processing...
+2023-11-24 15:08:01,986 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-24 15:08:01,994 - INFO - Done...blockID: 1
+2023-11-24 15:08:01,997 - INFO - Processing completed.
+2023-11-24 15:08:01,997 - INFO - --- Script finished ---
+2023-11-24 15:08:09,162 - INFO - --- Starting script ---
+2023-11-24 15:08:09,163 - INFO - Starting processing...
+2023-11-24 15:08:09,163 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-24 15:08:09,172 - INFO - Done...blockID: 1
+2023-11-24 15:08:09,174 - INFO - Processing completed.
+2023-11-24 15:08:09,174 - INFO - --- Script finished ---
+2023-11-24 15:08:57,477 - INFO - --- Starting script ---
+2023-11-24 15:08:57,477 - INFO - Starting processing...
+2023-11-24 15:08:57,485 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-24 15:08:57,493 - INFO - Done...blockID: 1
+2023-11-24 15:08:57,495 - INFO - Processing completed.
+2023-11-24 15:08:57,495 - INFO - --- Script finished ---
+2023-11-24 15:11:39,813 - INFO - --- Starting script ---
+2023-11-24 15:11:39,814 - INFO - Starting processing...
+2023-11-24 15:11:39,815 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-24 15:11:39,853 - INFO - Done...blockID: 1
+2023-11-24 15:11:39,856 - INFO - Processing completed.
+2023-11-24 15:11:39,856 - INFO - --- Script finished ---
+2023-11-24 15:11:52,211 - INFO - --- Starting script ---
+2023-11-24 15:11:52,211 - INFO - Starting processing...
+2023-11-24 15:11:52,213 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-24 15:11:52,227 - INFO - Done...blockID: 1
+2023-11-24 15:11:52,229 - INFO - Processing completed.
+2023-11-24 15:11:52,229 - INFO - --- Script finished ---
+2023-11-24 15:12:44,715 - INFO - --- Starting script ---
+2023-11-24 15:12:44,715 - INFO - Starting processing...
+2023-11-24 15:12:44,715 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-24 15:12:44,725 - INFO - Done...blockID: 1
+2023-11-24 15:12:44,732 - INFO - Processing completed.
+2023-11-24 15:12:44,732 - INFO - --- Script finished ---
+2023-11-24 15:12:52,208 - INFO - --- Starting script ---
+2023-11-24 15:12:52,209 - INFO - Starting processing...
+2023-11-24 15:12:52,211 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-24 15:12:52,225 - INFO - Done...blockID: 1
+2023-11-24 15:12:52,228 - INFO - Processing completed.
+2023-11-24 15:12:52,228 - INFO - --- Script finished ---
+2023-11-24 15:16:23,620 - INFO - --- Starting script ---
+2023-11-24 15:16:23,620 - INFO - Starting processing...
+2023-11-24 15:16:23,622 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-24 15:16:23,637 - INFO - Done...blockID: 1
+2023-11-24 15:16:23,640 - INFO - Processing completed.
+2023-11-24 15:16:23,640 - INFO - --- Script finished ---
+2023-11-24 15:22:30,538 - INFO - --- Starting script ---
+2023-11-24 15:22:30,538 - INFO - Starting processing...
+2023-11-24 15:22:30,540 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-24 15:28:32,073 - INFO - --- Starting script ---
+2023-11-24 15:28:32,074 - INFO - Starting processing...
+2023-11-24 15:28:32,075 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-24 15:28:58,371 - INFO - --- Starting script ---
+2023-11-24 15:28:58,372 - INFO - Starting processing...
+2023-11-24 15:28:58,373 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-24 15:29:42,643 - INFO - --- Starting script ---
+2023-11-24 15:29:42,643 - INFO - Starting processing...
+2023-11-24 15:29:42,644 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-24 15:30:02,971 - INFO - --- Starting script ---
+2023-11-24 15:30:02,972 - INFO - Starting processing...
+2023-11-24 15:30:02,973 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-24 15:30:02,981 - INFO - Done...blockID: 1
+2023-11-24 15:30:02,983 - INFO - Processing completed.
+2023-11-24 15:30:02,983 - INFO - --- Script finished ---
+2023-11-24 15:33:07,154 - INFO - --- Starting script ---
+2023-11-24 15:33:07,154 - INFO - Starting processing...
+2023-11-24 15:33:07,154 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-24 15:33:07,159 - INFO - Done...blockID: 1
+2023-11-24 15:33:07,169 - INFO - Processing completed.
+2023-11-24 15:33:07,169 - INFO - --- Script finished ---
+2023-11-24 15:33:14,722 - INFO - --- Starting script ---
+2023-11-24 15:33:14,723 - INFO - Starting processing...
+2023-11-24 15:33:14,724 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-24 15:33:14,736 - INFO - Done...blockID: 1
+2023-11-24 15:33:14,739 - INFO - Processing completed.
+2023-11-24 15:33:14,739 - INFO - --- Script finished ---
+2023-11-24 15:35:40,856 - INFO - --- Starting script ---
+2023-11-24 15:35:40,856 - INFO - Starting processing...
+2023-11-24 15:35:40,857 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-24 15:35:40,874 - INFO - Done...blockID: 1
+2023-11-24 15:35:40,878 - INFO - Processing completed.
+2023-11-24 15:35:40,878 - INFO - --- Script finished ---
+2023-11-24 15:38:23,894 - INFO - --- Starting script ---
+2023-11-24 15:38:23,894 - INFO - Starting processing...
+2023-11-24 15:38:23,895 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-24 15:38:23,905 - INFO - Done...blockID: 1
+2023-11-24 15:38:23,908 - INFO - Processing completed.
+2023-11-24 15:38:23,908 - INFO - --- Script finished ---
+2023-11-24 15:38:32,733 - INFO - --- Starting script ---
+2023-11-24 15:38:32,733 - INFO - Starting processing...
+2023-11-24 15:38:32,734 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-24 15:38:32,738 - INFO - Done...blockID: 1
+2023-11-24 15:38:32,744 - INFO - Processing completed.
+2023-11-24 15:38:32,744 - INFO - --- Script finished ---
+2023-11-24 15:44:13,867 - INFO - --- Starting script ---
+2023-11-24 15:44:13,867 - INFO - Starting processing...
+2023-11-24 15:44:13,868 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-24 15:44:13,879 - INFO - Done...blockID: 1
+2023-11-24 15:44:13,881 - INFO - Processing completed.
+2023-11-24 15:44:13,881 - INFO - --- Script finished ---
+2023-11-24 15:48:27,172 - INFO - --- Starting script ---
+2023-11-24 15:48:27,173 - INFO - Starting processing...
+2023-11-24 15:48:27,174 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-24 15:51:12,148 - INFO - --- Starting script ---
+2023-11-24 15:51:12,148 - INFO - Starting processing...
+2023-11-24 15:51:12,150 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-24 15:51:12,159 - INFO - Done...blockID: 1
+2023-11-24 15:51:12,160 - INFO - Processing completed.
+2023-11-24 15:51:12,161 - INFO - --- Script finished ---
+2023-11-24 15:51:22,429 - INFO - --- Starting script ---
+2023-11-24 15:51:22,430 - INFO - Starting processing...
+2023-11-24 15:51:22,431 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-24 15:51:22,442 - INFO - Done...blockID: 1
+2023-11-24 15:51:22,443 - INFO - Processing completed.
+2023-11-24 15:51:22,443 - INFO - --- Script finished ---
+2023-11-24 15:56:44,151 - INFO - --- Starting script ---
+2023-11-24 15:56:44,151 - INFO - Starting processing...
+2023-11-24 15:56:44,152 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-24 15:57:37,691 - INFO - --- Starting script ---
+2023-11-24 15:57:37,691 - INFO - Starting processing...
+2023-11-24 15:57:37,692 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-24 15:58:29,264 - INFO - --- Starting script ---
+2023-11-24 15:58:29,264 - INFO - Starting processing...
+2023-11-24 15:58:29,266 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-24 16:00:06,442 - INFO - --- Starting script ---
+2023-11-24 16:00:06,442 - INFO - Starting processing...
+2023-11-24 16:00:06,444 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-24 16:00:24,156 - INFO - --- Starting script ---
+2023-11-24 16:00:24,156 - INFO - Starting processing...
+2023-11-24 16:00:24,157 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-24 16:01:54,621 - INFO - --- Starting script ---
+2023-11-24 16:01:54,621 - INFO - Starting processing...
+2023-11-24 16:01:54,634 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-24 16:01:54,642 - WARNING - Column 'date_min' not found in the group.
+2023-11-24 16:01:54,642 - WARNING - Column 'date_min' not found in the group.
+2023-11-24 16:01:54,642 - WARNING - Column 'date_min' not found in the group.
+2023-11-24 16:01:54,642 - WARNING - Column 'date_min' not found in the group.
+2023-11-24 16:01:54,643 - INFO - Done...blockID: 1
+2023-11-24 16:01:54,653 - INFO - Processing completed.
+2023-11-24 16:01:54,653 - INFO - --- Script finished ---
+2023-11-24 16:02:01,062 - INFO - --- Starting script ---
+2023-11-24 16:02:01,062 - INFO - Starting processing...
+2023-11-24 16:02:01,063 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-24 16:02:01,071 - WARNING - Column 'date_min' not found in the group.
+2023-11-24 16:02:01,072 - WARNING - Column 'date_min' not found in the group.
+2023-11-24 16:02:01,072 - WARNING - Column 'date_min' not found in the group.
+2023-11-24 16:02:01,072 - WARNING - Column 'date_min' not found in the group.
+2023-11-24 16:02:01,074 - INFO - Done...blockID: 1
+2023-11-24 16:02:01,076 - INFO - Processing completed.
+2023-11-24 16:02:01,076 - INFO - --- Script finished ---
+2023-11-24 16:03:08,734 - INFO - --- Starting script ---
+2023-11-24 16:03:08,735 - INFO - Starting processing...
+2023-11-24 16:03:08,735 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-24 16:11:23,929 - INFO - --- Starting script ---
+2023-11-24 16:11:23,929 - INFO - Starting processing...
+2023-11-24 16:11:23,930 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-24 16:11:41,391 - INFO - --- Starting script ---
+2023-11-24 16:11:41,391 - INFO - Starting processing...
+2023-11-24 16:11:41,392 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-24 16:11:41,402 - INFO - Done...blockID: 1
+2023-11-24 16:11:41,403 - INFO - Processing completed.
+2023-11-24 16:11:41,403 - INFO - --- Script finished ---
+2023-11-24 16:11:50,774 - INFO - --- Starting script ---
+2023-11-24 16:11:50,774 - INFO - Starting processing...
+2023-11-24 16:11:50,777 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-24 16:11:50,793 - INFO - Done...blockID: 1
+2023-11-24 16:11:50,798 - INFO - Processing completed.
+2023-11-24 16:11:50,798 - INFO - --- Script finished ---
+2023-11-24 16:30:14,281 - INFO - --- Starting script ---
+2023-11-24 16:30:14,282 - INFO - Starting processing...
+2023-11-24 16:30:14,283 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-24 16:30:14,291 - INFO - Done...blockID: 1
+2023-11-24 16:30:14,292 - INFO - Processing completed.
+2023-11-24 16:30:14,293 - INFO - --- Script finished ---
+2023-11-24 16:30:50,234 - INFO - --- Starting script ---
+2023-11-24 16:30:50,245 - INFO - Starting processing...
+2023-11-24 16:30:50,245 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-24 16:30:50,250 - INFO - Done...blockID: 1
+2023-11-24 16:30:50,254 - INFO - Processing completed.
+2023-11-24 16:30:50,254 - INFO - --- Script finished ---
+2023-11-24 16:34:33,727 - INFO - --- Starting script ---
+2023-11-24 16:34:33,727 - INFO - Starting processing...
+2023-11-24 16:34:33,728 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-24 16:34:33,736 - INFO - Done...blockID: 1
+2023-11-24 16:34:33,738 - INFO - Processing completed.
+2023-11-24 16:34:33,738 - INFO - --- Script finished ---
+2023-11-24 16:35:37,113 - INFO - --- Starting script ---
+2023-11-24 16:35:37,113 - INFO - Starting processing...
+2023-11-24 16:35:37,115 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-24 16:35:37,123 - INFO - Done...blockID: 1
+2023-11-24 16:35:37,125 - INFO - Processing completed.
+2023-11-24 16:35:37,126 - INFO - --- Script finished ---
+2023-11-24 16:35:47,031 - INFO - --- Starting script ---
+2023-11-24 16:35:47,031 - INFO - Starting processing...
+2023-11-24 16:35:47,032 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-24 16:35:47,041 - INFO - Done...blockID: 1
+2023-11-24 16:35:47,043 - INFO - Processing completed.
+2023-11-24 16:35:47,044 - INFO - --- Script finished ---
+2023-11-24 16:36:31,458 - INFO - --- Starting script ---
+2023-11-24 16:36:31,458 - INFO - Starting processing...
+2023-11-24 16:36:31,459 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-24 16:36:31,467 - INFO - Done...blockID: 1
+2023-11-24 16:36:31,470 - INFO - Processing completed.
+2023-11-24 16:36:31,470 - INFO - --- Script finished ---
+2023-11-24 16:37:01,317 - INFO - --- Starting script ---
+2023-11-24 16:37:01,317 - INFO - Starting processing...
+2023-11-24 16:37:01,324 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-24 16:37:01,324 - INFO - Done...blockID: 1
+2023-11-24 16:37:01,333 - INFO - Processing completed.
+2023-11-24 16:37:01,333 - INFO - --- Script finished ---
+2023-11-24 16:37:14,200 - INFO - --- Starting script ---
+2023-11-24 16:37:14,201 - INFO - Starting processing...
+2023-11-24 16:37:14,203 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-24 16:37:14,212 - INFO - Done...blockID: 1
+2023-11-24 16:37:14,214 - INFO - Processing completed.
+2023-11-24 16:37:14,214 - INFO - --- Script finished ---
+2023-11-24 16:37:41,451 - INFO - --- Starting script ---
+2023-11-24 16:37:41,451 - INFO - Starting processing...
+2023-11-24 16:37:41,453 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-24 16:37:41,463 - INFO - Done...blockID: 1
+2023-11-24 16:37:41,466 - INFO - Processing completed.
+2023-11-24 16:37:41,466 - INFO - --- Script finished ---
+2023-11-24 16:38:43,069 - INFO - --- Starting script ---
+2023-11-24 16:38:43,069 - INFO - Starting processing...
+2023-11-24 16:38:43,071 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-24 16:38:43,079 - INFO - Done...blockID: 1
+2023-11-24 16:38:43,081 - INFO - Processing completed.
+2023-11-24 16:38:43,081 - INFO - --- Script finished ---
+2023-11-24 16:39:14,119 - INFO - --- Starting script ---
+2023-11-24 16:39:14,119 - INFO - Starting processing...
+2023-11-24 16:39:14,120 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-24 16:39:14,132 - INFO - Done...blockID: 1
+2023-11-24 16:39:14,134 - INFO - Processing completed.
+2023-11-24 16:39:14,134 - INFO - --- Script finished ---
+2023-11-24 16:40:12,567 - INFO - --- Starting script ---
+2023-11-24 16:40:12,567 - INFO - Starting processing...
+2023-11-24 16:40:12,569 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-24 16:40:12,587 - INFO - Done...blockID: 1
+2023-11-24 16:40:12,591 - INFO - Processing completed.
+2023-11-24 16:40:12,591 - INFO - --- Script finished ---
+2023-11-24 16:40:47,525 - INFO - --- Starting script ---
+2023-11-24 16:40:47,525 - INFO - Starting processing...
+2023-11-24 16:40:47,528 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-24 16:40:47,548 - INFO - Done...blockID: 1
+2023-11-24 16:40:47,556 - INFO - Processing completed.
+2023-11-24 16:40:47,557 - INFO - --- Script finished ---
+2023-11-24 16:41:26,953 - INFO - --- Starting script ---
+2023-11-24 16:41:26,954 - INFO - Starting processing...
+2023-11-24 16:41:26,955 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-24 16:41:26,970 - INFO - Done...blockID: 1
+2023-11-24 16:41:26,973 - INFO - Processing completed.
+2023-11-24 16:41:26,973 - INFO - --- Script finished ---
+2023-11-24 16:42:40,875 - INFO - --- Starting script ---
+2023-11-24 16:42:40,875 - INFO - Starting processing...
+2023-11-24 16:42:40,876 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-24 16:42:40,888 - INFO - Done...blockID: 1
+2023-11-24 16:42:40,891 - INFO - Processing completed.
+2023-11-24 16:42:40,892 - INFO - --- Script finished ---
+2023-11-24 16:43:30,215 - INFO - --- Starting script ---
+2023-11-24 16:43:30,216 - INFO - Starting processing...
+2023-11-24 16:43:30,217 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-24 16:43:30,228 - INFO - Done...blockID: 1
+2023-11-24 16:43:30,230 - INFO - Processing completed.
+2023-11-24 16:43:30,230 - INFO - --- Script finished ---
+2023-11-24 16:43:37,004 - INFO - --- Starting script ---
+2023-11-24 16:43:37,004 - INFO - Starting processing...
+2023-11-24 16:43:37,005 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-24 16:43:37,017 - INFO - Done...blockID: 1
+2023-11-24 16:43:37,019 - INFO - Processing completed.
+2023-11-24 16:43:37,019 - INFO - --- Script finished ---
+2023-11-24 16:45:20,367 - INFO - --- Starting script ---
+2023-11-24 16:45:20,367 - INFO - Starting processing...
+2023-11-24 16:45:20,371 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-24 16:45:20,381 - INFO - Done...blockID: 1
+2023-11-24 16:45:20,384 - INFO - Processing completed.
+2023-11-24 16:45:20,384 - INFO - --- Script finished ---
+2023-11-24 16:46:54,109 - INFO - --- Starting script ---
+2023-11-24 16:46:54,109 - INFO - Starting processing...
+2023-11-24 16:46:54,110 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-24 16:46:54,118 - INFO - Done...blockID: 1
+2023-11-24 16:46:54,120 - INFO - Processing completed.
+2023-11-24 16:46:54,120 - INFO - --- Script finished ---
+2023-11-24 16:50:13,719 - INFO - --- Starting script ---
+2023-11-24 16:50:13,719 - INFO - Starting processing...
+2023-11-24 16:50:13,720 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-24 16:50:13,727 - INFO - Done...blockID: 1
+2023-11-24 16:50:13,731 - INFO - Processing completed.
+2023-11-24 16:50:13,731 - INFO - --- Script finished ---
+2023-11-28 14:36:25,158 - INFO - --- Starting script ---
+2023-11-28 14:36:25,158 - INFO - Starting processing...
+2023-11-28 14:36:25,158 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-28 14:36:25,269 - INFO - Done...blockID: 1
+2023-11-28 14:36:25,269 - INFO - Processing completed.
+2023-11-28 14:36:25,269 - INFO - --- Script finished ---
+2023-11-28 14:36:39,734 - INFO - --- Starting script ---
+2023-11-28 14:36:39,734 - INFO - Starting processing...
+2023-11-28 14:36:39,734 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-28 14:36:39,750 - INFO - Done...blockID: 1
+2023-11-28 14:36:39,764 - INFO - Processing completed.
+2023-11-28 14:36:39,765 - INFO - --- Script finished ---
+2023-11-28 14:37:36,717 - INFO - --- Starting script ---
+2023-11-28 14:37:36,717 - INFO - Starting processing...
+2023-11-28 14:37:36,731 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-28 14:37:36,733 - INFO - Done...blockID: 1
+2023-11-28 14:37:36,733 - INFO - Processing completed.
+2023-11-28 14:37:36,733 - INFO - --- Script finished ---
+2023-11-28 14:37:43,050 - INFO - --- Starting script ---
+2023-11-28 14:37:43,050 - INFO - Starting processing...
+2023-11-28 14:37:43,050 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-28 14:37:43,064 - INFO - Done...blockID: 1
+2023-11-28 14:37:43,067 - INFO - Processing completed.
+2023-11-28 14:37:43,067 - INFO - --- Script finished ---
+2023-11-30 12:21:13,454 - INFO - --- Starting script ---
+2023-11-30 12:21:13,455 - INFO - Starting processing...
+2023-11-30 12:21:13,475 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-30 12:21:51,337 - INFO - --- Starting script ---
+2023-11-30 12:21:51,337 - INFO - Starting processing...
+2023-11-30 12:21:51,337 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-30 12:21:51,395 - INFO - Done...blockID: 1
+2023-11-30 12:21:51,404 - INFO - Processing completed.
+2023-11-30 12:21:51,404 - INFO - --- Script finished ---
+2023-11-30 12:22:11,543 - INFO - --- Starting script ---
+2023-11-30 12:22:11,543 - INFO - Starting processing...
+2023-11-30 12:22:11,543 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-30 12:22:11,556 - INFO - Done...blockID: 1
+2023-11-30 12:22:11,556 - INFO - Processing completed.
+2023-11-30 12:22:11,556 - INFO - --- Script finished ---
+2023-11-30 16:39:35,332 - INFO - --- Starting script ---
+2023-11-30 16:39:35,332 - INFO - Starting processing...
+2023-11-30 16:39:35,365 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-30 16:39:35,486 - INFO - Done...blockID: 1
+2023-11-30 16:39:35,499 - INFO - Processing completed.
+2023-11-30 16:39:35,499 - INFO - --- Script finished ---
+2023-11-30 16:39:42,393 - INFO - --- Starting script ---
+2023-11-30 16:39:42,393 - INFO - Starting processing...
+2023-11-30 16:39:42,394 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-30 16:39:42,402 - INFO - Done...blockID: 1
+2023-11-30 16:39:42,405 - INFO - Processing completed.
+2023-11-30 16:39:42,405 - INFO - --- Script finished ---
+2023-11-30 16:42:31,394 - INFO - --- Starting script ---
+2023-11-30 16:42:31,394 - INFO - Starting processing...
+2023-11-30 16:42:31,395 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-30 16:42:31,404 - INFO - Done...blockID: 1
+2023-11-30 16:42:31,406 - INFO - Processing completed.
+2023-11-30 16:42:31,406 - INFO - --- Script finished ---
+2023-11-30 16:43:11,359 - INFO - --- Starting script ---
+2023-11-30 16:43:11,360 - INFO - Starting processing...
+2023-11-30 16:43:11,360 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-30 16:43:11,369 - INFO - Done...blockID: 1
+2023-11-30 16:43:11,370 - INFO - Processing completed.
+2023-11-30 16:43:11,370 - INFO - --- Script finished ---
+2023-11-30 16:43:18,799 - INFO - --- Starting script ---
+2023-11-30 16:43:18,799 - INFO - Starting processing...
+2023-11-30 16:43:18,799 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-30 16:43:18,812 - INFO - Done...blockID: 1
+2023-11-30 16:43:18,815 - INFO - Processing completed.
+2023-11-30 16:43:18,815 - INFO - --- Script finished ---
+2023-11-30 16:44:40,909 - INFO - --- Starting script ---
+2023-11-30 16:44:40,910 - INFO - Starting processing...
+2023-11-30 16:44:40,911 - INFO - Finished reading input file: output/duration/output.csv
+2023-11-30 16:44:40,920 - INFO - Done...blockID: 1
+2023-11-30 16:44:40,924 - INFO - Processing completed.
+2023-11-30 16:44:40,924 - INFO - --- Script finished ---
+2023-12-01 11:53:05,060 - INFO - --- Starting script ---
+2023-12-01 11:53:05,061 - INFO - Starting processing...
+2023-12-01 11:53:05,062 - INFO - Finished reading input file: output/duration/output.csv
+2023-12-01 11:53:05,112 - INFO - Done...blockID: 1
+2023-12-01 11:53:05,127 - INFO - Processing completed.
+2023-12-01 11:53:05,127 - INFO - --- Script finished ---

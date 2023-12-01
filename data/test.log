@@ -1,0 +1,24 @@
+[2023/09/20 17:01:52] IN         StateManager    Status: (2,2) UMeobFtqbahPLEc/0xtQ05Da
+[2023/09/20 17:01:52] TOREGISTER StateManager    Status: (2,2) UMeobFtqbahPLEc/0xtQ05Da
+[2023/09/20 17:01:52] OUT        EventManager    event:UMeobFtqbahPLEc/0xtQ05Da
+[2023/09/20 17:01:52] TOREGISTER ServiceCenterOu transaction:UMeobG4DekaPqEc/0xsgmc5Y
+[2023/09/20 17:01:52] OUT        ServiceCenterOu transaction:UMeobG4DekaPqEc/0xsgmc5Y pri:4
+[2023/09/20 17:01:52] IN         Output          transaction:UMeobG4DekaPqEc/0xsgmc5Y
+[2023/09/20 17:01:53] IN         DeliveryManager transaction:UMeobG4DekaPqEc/0xsgmc5Y
+[2023/09/20 17:01:53] TOREGISTER DeliveryManager transaction:UMeobG4DekaPqEc/0xsgmc5Y
+[2023/09/20 17:01:53] OUT        DeliveryManager transaction:UMeobG4DekaPqEc/0xsgmc5Y
+[2023/09/20 17:01:53] MNEWTRANS  ServiceCenterOu transaction:UMeobH2tfFwm6+c/0xv2KQJP transaction:UMeobH3Yk2FIfUc/0xv4WB8i 
+[2023/09/20 17:01:53] TOREGISTER ServiceCenterOu transaction:UMeobH3Yk2FIfUc/0xv4WB8i
+[2023/09/20 17:01:53] OUT        ServiceCenterOu transaction:UMeobH3Yk2FIfUc/0xv4WB8i pri:4
+[2023/09/20 17:01:53] IN         Output          transaction:UMeobH3Yk2FIfUc/0xv4WB8i
+[2023/09/20 17:01:53] IN         DeliveryManager transaction:UMeobH3Yk2FIfUc/0xv4WB8i
+[2023/09/20 17:01:53] OUT        DeliveryManager transaction:UMeobH3Yk2FIfUc/0xv4WB8i
+[2023/09/20 17:01:53] OUT        Output          transaction:UMeobH3Yk2FIfUc/0xv4WB8i
+[2023/09/20 17:01:54] IN         FailOverManager transaction:UMeobH3Yk2FIfUc/0xv4WB8i
+[2023/09/20 17:01:54] OUT        FailOverManager transaction:UMeobH3Yk2FIfUc/0xv4WB8i pri:4
+[2023/09/20 17:01:54] IN         ColSMTPOut      transaction:UMeobH3Yk2FIfUc/0xv4WB8i
+[2023/09/20 17:01:54] OUT        ColSMTPOut      Status: (2,2) UMeobH3Yk2FIfUc/0xv4WB8i
+[2023/09/20 17:01:54] OUT        ColSMTPOut      Status: (1,2) UMeobH3Yk2FIfUc/0xv4WB8i
+[2023/09/20 17:01:54] SEND       ColSMTPOut      transaction:UMeobH3Yk2FIfUc/0xv4WB8i
+[2023/09/20 17:01:54] IN         JMSCollInAdp    event:UMeobH3Yk2FIfUc/0xv4WB8i
+[2023/09/20 17:01:54] OUT        JMSCollInAdp    event:UMeobH3Yk2FIfUc/0xv4WB8i
