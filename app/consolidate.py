@@ -8,7 +8,7 @@ from datetime import datetime
 
 ## Variables de Entorno para Ejecución del Script
 config = configparser.ConfigParser()
-config.read('config.ini')
+config.read('./config/config.ini')
 logPath = config['consolidate']['logPath']
 inputPath = config['consolidate']['inputPath']
 outputPath = config['consolidate']['outputPath']
