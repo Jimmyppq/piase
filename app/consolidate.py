@@ -1,10 +1,9 @@
 import pandas as pd
 import logging
 import os
-import configparser
 import time
 from datetime import datetime
-
+import configparser
 
 ## Variables de Entorno para Ejecución del Script
 config = configparser.ConfigParser()
@@ -13,7 +12,6 @@ logPath = config['consolidate']['logPath']
 inputPath = config['consolidate']['inputPath']
 outputPath = config['consolidate']['outputPath']
 
-  
 def setup_logging():
     logging.basicConfig(filename=logPath,
                         level=logging.INFO,
@@ -40,13 +38,20 @@ def get_first_last_dates_ef(group):
         first_subcomponent = newtrans_row['first_subcomponent']
         first_priority = newtrans_row['priority']
 
+    elif 'MNEWTRANS' in group['first_action'].values:
+        mnewtrans_row = group[group['first_action'] == 'MNEWTRANS'].iloc[0]
+        first_date = mnewtrans_row['date_min']
+        first_action = mnewtrans_row['first_action']
+        first_subcomponent = mnewtrans_row['first_subcomponent']
+        first_priority = mnewtrans_row['priority']
+
     if 'SEND' in group['last_action'].values:
         last_action_row = group[group['last_action'] == 'SEND'].iloc[-1]
         last_date = last_action_row['date_max']
         last_action = last_action_row['last_action']
         last_subcomponent = last_action_row['last_subcomponent']
-    elif 'SEND-ERR' in group['first_action'].values:
-        last_action_row = group[group['first_action'] == 'SEND-ERR'].iloc[-1]
+    elif 'SEND' in group['first_action'].values:
+        last_action_row = group[group['first_action'] == 'SEND'].iloc[-1]
         last_date = last_action_row['date_min']
         last_action = last_action_row['first_action']
         last_subcomponent = last_action_row['first_subcomponent']
@@ -94,7 +99,14 @@ def get_first_last_dates(group):
         first_action = first_action_row['first_action']
         first_subcomponent = first_action_row['first_subcomponent']
         first_priority = first_action_row['priority']
-
+        
+    elif 'MNEWTRANS' in group['first_action'].values:
+        first_action_row = group[group['first_action'] == 'MNEWTRANS'].iloc[0]
+        first_date = first_action_row['date_min']
+        first_action = first_action_row['first_action']
+        first_subcomponent = first_action_row['first_subcomponent']
+        first_priority = first_action_row['priority']
+      
 
     if 'SEND' in group['last_action'].values:
         last_action_row = group[group['last_action'] == 'SEND'].iloc[-1]
@@ -185,7 +197,7 @@ if __name__ == "__main__":
     # Inicializa el contador
     get_first_last_dates.count = 0
     
-    input_file_path = inputPath 
+    input_file_path = inputPath
     output_file_path = outputPath
     if not os.path.exists(input_file_path):
         logging.error(f"El archivo {input_file_path} no existe. Terminando la ejecución.")
