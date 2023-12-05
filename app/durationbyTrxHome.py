@@ -7,23 +7,16 @@ import logging
 import time
 import configparser
 
-
 ## Variables de Entorno para Ejecución del Script
 config = configparser.ConfigParser()
-config.read('./config/config.ini')
+config.read('../config/config.ini')
 logPath = config['duration']['logPath']
 inputPath = config['duration']['inputPath']
 outputPath = config['duration']['outputPath']
 readSpeedPath= config['duration']['readSpeedPath']
 pattern = config['duration']['pattern']
+files= config['duration']['files']
 
-import pandas as pd
-import os
-import re
-from datetime import datetime
-from pathlib import Path
-import logging
-import time
 
 def setup_logging():
 
@@ -120,17 +113,19 @@ def process_log_file(file_path):
     end_time = time.time()  # Registra el tiempo de finalización
     
     # Calcula la velocidad de lectura en MB por segundo
-    #file_size_mb = len(''.join(log_lines)) / (1024 * 1024)  # Tamaño del archivo en MB
-    #read_speed_mb_per_sec = file_size_mb / (end_time - start_time)
+    file_size_mb = len(''.join(log_lines)) / (1024 * 1024)  # Tamaño del archivo en MB
+    read_speed_mb_per_sec = file_size_mb / (end_time - start_time)
     
     # Registra la velocidad de lectura en el archivo de registro o donde desees
     #print(f"File: {file_path}, Read Speed (MB/s): {read_speed_mb_per_sec}\n")
-    #with open('logs/read_speed.log', 'a') as log_file:
-    #    log_file.write(f"File: {file_path}, Read Speed (MB/s): {read_speed_mb_per_sec}\n")
+    with open(readSpeedPath, 'a') as log_file:
+        log_file.write(f"File: {file_path}, Read Speed (MB/s): {read_speed_mb_per_sec}\n")
        
     # Process each log line and store the results in a list
     #log_data = [process_log_line(line) for line in log_lines if process_log_line(line) is not None]
     log_data = [process_log_line(line) for line in log_lines]
+    
+    
     
     valid_log_data = [data for data in log_data if data is not None]
 
@@ -160,7 +155,8 @@ def process_log_file(file_path):
         priority = row['priority']
         Mtransaction_id = row['Mtransaction_id']
         
-    
+                      
+        
         #print(f"TransactionId:{transaction_id} - Action:{action} - Timestamp:{timestamp} - Mtransaction_id: {Mtransaction_id}")
 
         # Update transaction details
@@ -175,58 +171,25 @@ def process_log_file(file_path):
                 'first_subcomponent': subcomponent,
                 'last_subcomponent': subcomponent,
                 'send': True if action in ('SEND', 'REJECTED') else False, # Whether the SEND or REJECTED action has been encountered
-                'newtrans': False,  # Whether the NEWTRANS or MNEWTRANS action has been encountered
-                'Mtransaction_id': Mtransaction_id #Nueva posicion en el diccionario para que se traiga el valor de Mtransaction_id # DR 22/11/2023
+                'newtrans': False  # Whether the NEWTRANS or MNEWTRANS action has been encountered
             }                  
         else:
             # If the transaction is in the dictionary, update it
-            transaction = transactions[transaction_id]      
-
-            # Update date_min, first_action, and first_subcomponent if NEWTRANS
-            # Se suprime una actualizacion que se encontraba repetida
-            # especificamente la "transaction['first_action'] = action"
-            if action == 'NEWTRANS' :
-                transaction['date_min'] = timestamp
-                transaction['first_action'] = action
-                transaction['first_subcomponent'] = subcomponent
-                transaction['newtrans'] = True  
-
-
-            # Se vuelve a usar la condicional que modifica el valor de la columna Transaction ID 
-            # por el valor de la nueva columna Mtransaction_id
-            # Este cambio es fundamental dentro de las actuaizaciones del ciclo de la transaccion
-                
+            transaction = transactions[transaction_id]
+                        
             if Mtransaction_id is not None :
                 transactions[Mtransaction_id] = transaction
                 transactions.pop(transaction_id, None)
-        
-            """
-            
-            Estas condicionales se trabajaron a modo de prueba. Sin embargo, luego de realizar las respectivas pruebas
-            los resultados no fueron los esperados.
+                transaction = transactions[Mtransaction_id]         
 
-            De igual forma prefiría mantenerla, ya que las validaciones al momento de actualizar el valor de la 
-            columna, se pudiese usar para algunos logs de que escriban de manera distinta.
 
-            DR 11 - 2023 
-            
-
-            if action == 'IN':
-                transaction['first_action'] = action if transaction['first_action'] is None else action
-               transaction['first_subcomponent'] = subcomponent if transaction['first_subcomponent'] is None else subcomponent
-            
-            if subcomponent == 'FailOverManager':
-                transaction['first_subcomponent'] = subcomponent if transaction['last_subcomponent'] is None else subcomponent
-                transaction['last_subcomponent'] = subcomponent if transaction['first_subcomponent'] is None else transaction['last_subcomponent']
-                transaction['first_action'] = action if transaction ['last_action'] is None else action
-                transaction['last_action'] = action if transaction['first_action'] is None else transaction['last_action']
-            """
-
-            #Actualizacion si la transaccion tiene una accion "SEND" 
-            if action in ('SEND', 'SEND-ERR') :
-                transaction['last_subcomponent'] = subcomponent
-                transaction['last_action']= action
-                transaction['send'] = True
+            # Update date_min, first_action, and first_subcomponent if NEWTRANS
+            if action == 'NEWTRANS' :
+                transaction['date_min'] = timestamp
+                transaction['first_action'] = action
+                transaction['first_action'] = action
+                transaction['first_subcomponent'] = subcomponent
+                transaction['newtrans'] = True
 
             # Update date_max, last_action, and last_subcomponent only if SEND has not been encountered
             if not transaction['send']:
@@ -259,7 +222,6 @@ def process_log_file(file_path):
     # Append to the main DataFrame
     all_transactions_df = pd.concat([all_transactions_df, transactions_df])
 
-
 def process_log_files(directory_path, file_pattern):
     """
     This function processes all log files in a directory and its subdirectories that match a given pattern.
@@ -287,19 +249,27 @@ def process_log_files(directory_path, file_pattern):
         count+=1
         if count % 2 == 0:
             logging.info(f'Ha terminado de procesar {count} archivos...')
+        
 
 setup_logging()
 # Initialize a DataFrame to store the results from all files
 all_transactions_df = pd.DataFrame()
-    
+
 # Process all log files in the given directory and its subdirectories that match the given pattern
 # Call the function with your directory path and file pattern
-process_log_files(inputPath, "*.log")
-#process_log_files("/Users/jimmy/Library/CloudStorage/OneDrive-LatiniaInteractiveBusiness,S.A/Jimmy/brrMac/AisladoPrueba", "testoffice.log")
+#process_log_files("/mnt/NAS/BANORTE/259_LATSUP-2959_Monitoreo upselling 300TPS entorno Producción/2023-08-04 01 L01/F1", "*act*.log")
+#ofi
+#process_log_files("/Users/jimmy/Data/OneDrive - Latinia Interactive Business, S.A/Jimmy/brrMac/logsPrueba/", "*.log")
+#home
+process_log_files(inputPath, files)
 
 logging.info('Processing completed...')
 
 logging.info('Guardando resultado...')
 # Save the DataFrame to a CSV file
+#ofi
+#all_transactions_df.to_csv("/Users/jimmy/Library/CloudStorage/OneDrive-LatiniaInteractiveBusiness,S.A/Jimmy/utiles/Python/piase/output/result_prueba20112023.csv")
+#home
 all_transactions_df.to_csv(outputPath)
-logging.info('Resultado almacenado')    
+#all_transactions_df.to_csv("/home/scriptPython/Ver_2/piase/output/result_Banorte_02102023_F1.csv")
+logging.info('Resultado almacenado')
