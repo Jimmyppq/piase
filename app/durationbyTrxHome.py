@@ -7,7 +7,7 @@ import logging
 import time
 
 
-def setup_logging_multiple():
+def setup_logging():
     # Configuración del logger principal
     logger = logging.getLogger('logger_principal')
     logger.setLevel(logging.INFO)
@@ -266,7 +266,7 @@ def process_log_files(directory_path, file_pattern):
         
 
 
-logger_principal, logger_files, logger_write = setup_logging_multiple()
+logger_principal, logger_files, logger_write = setup_logging()
 
 # Initialize a DataFrame to store the results from all files
 #all_transactions_df = pd.DataFrame()
