@@ -6,13 +6,38 @@ from pathlib import Path
 import logging
 import time
 
-def setup_logging():
 
-    #logging.basicConfig(filename='/Users/jimmy/Library/CloudStorage/OneDrive-LatiniaInteractiveBusiness,S.A/Jimmy/utiles/Python/piase/logs/logBAC.log', level=logging.INFO,
-    #                    format='%(asctime)s - %(levelname)s - %(message)s')
-    logging.basicConfig(filename='/Users/colombia-01/OneDrive - Latinia Interactive Business, S.A/Jimmy/utiles/Python/piase/logs/log20112023.log', level=logging.INFO,
-                        format='%(asctime)s - %(levelname)s - %(message)s')
-    logging.info('--- Starting script ---')
+def setup_logging_multiple():
+    # Configuración del logger principal
+    logger = logging.getLogger('logger_principal')
+    logger.setLevel(logging.INFO)
+    # Handler para el primer archivo de log
+    file_handler = logging.FileHandler('../logs/log15122023.log')
+    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+    file_handler.setFormatter(formatter)
+    logger.addHandler(file_handler)
+
+    # Configuración del segundo logger
+    otro_logger = logging.getLogger('otro_logger')
+    otro_logger.setLevel(logging.INFO)
+    # Handler para el segundo archivo de log
+    otro_file_handler = logging.FileHandler('../logs/log_read_speed.log')
+    otro_file_handler.setFormatter(formatter)
+    otro_logger.addHandler(otro_file_handler)
+    
+    # Configuración del segundo logger
+    logger_write = logging.getLogger('logger_write')
+    logger_write.setLevel(logging.INFO)
+    # Handler para el segundo archivo de log
+    logger_writehandler = logging.FileHandler('../logs/log_write_result.log')
+    logger_writehandler.setFormatter(formatter)
+    logger_write.addHandler(logger_writehandler)
+
+    # Escribir un mensaje en el log principal
+    logger.info('--- Starting script ---')
+
+    return logger, otro_logger, logger_write
+
 
 def process_log_line(line):
     """
@@ -92,29 +117,22 @@ def process_log_file(file_path):
     """
     This function processes a log file and extracts transaction details.
     """
-    global all_transactions_df
+
 
     # Read the log file
     start_time = time.time()  # Registra el tiempo de inicio
     with open(file_path, 'r') as file:
         log_lines = file.readlines()
-    end_time = time.time()  # Registra el tiempo de finalización
-    
+    end_time = time.time()  # Registra el tiempo de finalización    
     # Calcula la velocidad de lectura en MB por segundo
     file_size_mb = len(''.join(log_lines)) / (1024 * 1024)  # Tamaño del archivo en MB
-    read_speed_mb_per_sec = file_size_mb / (end_time - start_time)
-    
+    read_speed_mb_per_sec = file_size_mb / (end_time - start_time)    
     # Registra la velocidad de lectura en el archivo de registro o donde desees
-    #print(f"File: {file_path}, Read Speed (MB/s): {read_speed_mb_per_sec}\n")
-    with open('../logs/read_speed.log', 'a') as log_file:
-        log_file.write(f"File: {file_path}, Read Speed (MB/s): {read_speed_mb_per_sec}\n")
+    logger_files.info(f"File: {file_path}, Read Speed (MB/s): {read_speed_mb_per_sec}\n")
        
     # Process each log line and store the results in a list
     #log_data = [process_log_line(line) for line in log_lines if process_log_line(line) is not None]
-    log_data = [process_log_line(line) for line in log_lines]
-    
-    
-    
+    log_data = [process_log_line(line) for line in log_lines]    
     valid_log_data = [data for data in log_data if data is not None]
 
     # Convert the list to a pandas DataFrame
@@ -142,13 +160,13 @@ def process_log_file(file_path):
         subcomponent = row['subcomponent']
         priority = row['priority']
         Mtransaction_id = row['Mtransaction_id']
-        
-                      
-        
-        #print(f"TransactionId:{transaction_id} - Action:{action} - Timestamp:{timestamp} - Mtransaction_id: {Mtransaction_id}")
-
+        mnewtrans_id = None
+     
         # Update transaction details
         if transaction_id not in transactions:
+            if Mtransaction_id is not None :
+                mnewtrans_id=transaction_id
+                transaction_id=Mtransaction_id
             # If the transaction is not in the dictionary, add it
             transactions[transaction_id] = {
                 'date_min': timestamp,
@@ -159,17 +177,16 @@ def process_log_file(file_path):
                 'first_subcomponent': subcomponent,
                 'last_subcomponent': subcomponent,
                 'send': True if action in ('SEND', 'REJECTED') else False, # Whether the SEND or REJECTED action has been encountered
-                'newtrans': False  # Whether the NEWTRANS or MNEWTRANS action has been encountered
+                'newtrans': False,  # Whether the NEWTRANS
+                'mnewtrans':mnewtrans_id
             }                  
         else:
-            # If the transaction is in the dictionary, update it
-            transaction = transactions[transaction_id]
-                        
+            # If the transaction is in the dictionary, update it            
+            transaction = transactions[transaction_id]                     
             if Mtransaction_id is not None :
-                transactions[Mtransaction_id] = transaction
+                transactions[Mtransaction_id] = transactions[transaction_id]
+                transactions[Mtransaction_id]['mnewtrans'] = transaction_id
                 transactions.pop(transaction_id, None)
-                transaction = transactions[Mtransaction_id]         
-
 
             # Update date_min, first_action, and first_subcomponent if NEWTRANS
             if action == 'NEWTRANS' :
@@ -192,11 +209,10 @@ def process_log_file(file_path):
             # Update SEND status
             if action in ['SEND','REJECTED']:  
                 transaction['send'] = True
-
-
+    
     # Convert the dictionary to a DataFrame
     transactions_df = pd.DataFrame(transactions.values(), index=transactions.keys())
-    transactions_df.index.name = 'Transaction ID'    
+    transactions_df.index.name = 'Transaction ID'  
 
     # Calculate duration in seconds
     transactions_df['Duration'] = (transactions_df['date_max'] - transactions_df['date_min']).dt.total_seconds()
@@ -205,16 +221,26 @@ def process_log_file(file_path):
     transactions_df['priority'] = transactions_df['priority'].fillna(-1)
 
     # Rearrange columns
-    transactions_df = transactions_df[['date_min', 'date_max', 'priority', 'first_action', 'last_action', 'first_subcomponent', 'last_subcomponent', 'Duration']]
+    transactions_df = transactions_df[['date_min', 'date_max', 'priority', 'first_action', 'last_action', 'first_subcomponent', 'last_subcomponent', 'Duration','mnewtrans']]
+    
 
     # Append to the main DataFrame
-    all_transactions_df = pd.concat([all_transactions_df, transactions_df])
+    if countFiles > 0 :    
+        transactions_df.to_csv("../output/result_prueba15122023DF_escenario4.csv", mode='a', header=False, index=True)
+        logger_write.info(f"CountFile: {countFiles}. records: {transactions_df.shape[0]}")
+    else :
+        transactions_df.to_csv("../output/result_prueba15122023DF_escenario4.csv", mode='w', header=True, index=True)
+        logger_write.info(f"CountFile: {countFiles}. records: {transactions_df.shape[0]}")
+        
+    #all_transactions_df = pd.concat([all_transactions_df, transactions_df])
 
 def process_log_files(directory_path, file_pattern):
     """
     This function processes all log files in a directory and its subdirectories that match a given pattern.
     """
-    logging.info('Starting processing log Files...')
+    global countFiles
+    
+    logger_principal.info('Starting processing log Files...')
     # Get the directory path
     directory_path = Path(directory_path)
     
@@ -223,41 +249,44 @@ def process_log_files(directory_path, file_pattern):
     
     # Check if no files were found
     if not matching_files:
-        logging.error('No files found Limsp_act*. Terminating the script.')
+        logging.error('No files found. Terminating the script.')
         exit(1)
     
-    logging.info(f'File search results: {len(matching_files)} files...')
-    count = 0
+    logger_principal.info(f'File search results: {len(matching_files)} files...')
+    
 
 
     # Iterate over each file in the directory and its subdirectories
     for file_path in directory_path.rglob(file_pattern):
         # Process the log file
         process_log_file(file_path)
-        count+=1
-        if count % 2 == 0:
-            logging.info(f'Ha terminado de procesar {count} archivos...')
+        countFiles+=1
+        if countFiles % 2 == 0:
+            logger_principal.info(f'Ha terminado de procesar {countFiles} archivos...')
         
 
-setup_logging()
+
+logger_principal, logger_files, logger_write = setup_logging_multiple()
+
 # Initialize a DataFrame to store the results from all files
-all_transactions_df = pd.DataFrame()
+#all_transactions_df = pd.DataFrame()
+countFiles = 0
 
 # Process all log files in the given directory and its subdirectories that match the given pattern
 # Call the function with your directory path and file pattern
 #process_log_files("/mnt/NAS/BANORTE/259_LATSUP-2959_Monitoreo upselling 300TPS entorno Producción/2023-08-04 01 L01/F1", "*act*.log")
 #ofi
-#process_log_files("/Users/jimmy/Data/OneDrive - Latinia Interactive Business, S.A/Jimmy/brrMac/logsPrueba/", "*.log")
+process_log_files("../data/", "escenario4*.log")
 #home
-process_log_files("/Users/colombia-01/OneDrive - Latinia Interactive Business, S.A/Jimmy/brrMac/logsPrueba/", "*.log")
+#process_log_files("/Users/colombia-01/OneDrive - Latinia Interactive Business, S.A/Jimmy/brrMac/logsPrueba/", "logActDR.log")
 
-logging.info('Processing completed...')
+logger_principal.info('Processing completed...')
 
-logging.info('Guardando resultado...')
+logger_principal.info('Guardando resultado...')
 # Save the DataFrame to a CSV file
 #ofi
-#all_transactions_df.to_csv("/Users/jimmy/Library/CloudStorage/OneDrive-LatiniaInteractiveBusiness,S.A/Jimmy/utiles/Python/piase/output/result_prueba20112023.csv")
-#home
-all_transactions_df.to_csv("/Users/colombia-01/Library/CloudStorage/OneDrive-LatiniaInteractiveBusiness,S.A/Jimmy/utiles/Python/piase/output/result_prueba20112023_1.csv")
+#all_transactions_df.to_csv("../output/result_prueba20112023_escenario4.csv")
+#home3
+#all_transactions_df.to_csv("/Users/colombia-01/Library/CloudStorage/OneDrive-LatiniaInteractiveBusiness,S.A/Jimmy/utiles/Python/piase/output/result_prueba04122023_1.csv")
 #all_transactions_df.to_csv("/home/scriptPython/Ver_2/piase/output/result_Banorte_02102023_F1.csv")
-logging.info('Resultado almacenado')
+logger_principal.info('Resultado almacenado')
