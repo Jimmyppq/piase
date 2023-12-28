@@ -77,7 +77,9 @@ def consolidate_transactions(generator, output_file_path, chunk_size, logger):
 
         # Manejar transacciones transformadas
         if mnewtrans:
-            trans_id = mnewtrans
+            current_value = transactions.pop(mnewtrans, None)
+            if current_value is not None:
+                transactions[trans_id] = current_value
 
         if trans_id not in transactions:
             transactions[trans_id] = [date_min, date_max, priority, first_action, 
@@ -100,14 +102,7 @@ def consolidate_transactions(generator, output_file_path, chunk_size, logger):
             # Calcular la duración para cada transacción
             for trans_id, values in transactions.items():           
                 duration = (values[1] - values[0]).total_seconds() 
-                transactions[trans_id].append(duration)                                
-                """                                        
-                if len(values) < 8: 
-                    duration = (values[1] - values[0]).total_seconds()
-                    print(f"for trx: {trans_id}. Date min {values[0]} - Date max {values[1]} duration: {duration} \n\n")
-                    transactions[trans_id].append(duration)
-                """    
-         
+                transactions[trans_id].append(duration)        
             df = pd.DataFrame.from_dict(transactions, orient='index',
                                         columns=['date_min', 'date_max', 'priority', 
                                                     'first_action', 'first_subcomponent', 
