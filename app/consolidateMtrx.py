@@ -89,13 +89,14 @@ def consolidate_transactions(generator, output_file_path, chunk_size, logger):
             if first_action == 'NEWTRANS' or date_min < transactions[trans_id][0]:
                 transactions[trans_id][0] = date_min
                 transactions[trans_id][3] = first_action
-                transactions[trans_id][4] = first_subcomponent                
-
-            # Comprobar y actualizar la fecha máxima y sus componentes asociados
-            if last_action == 'SEND' or date_max > transactions[trans_id][1]:
-                transactions[trans_id][1] = date_max
-                transactions[trans_id][5] = last_action
-                transactions[trans_id][6] = last_subcomponent                
+                transactions[trans_id][4] = first_subcomponent
+            
+            if transactions[trans_id][5] != 'SEND':
+                # Comprobar y actualizar la fecha máxima y sus componentes asociados
+                if date_max > transactions[trans_id][1]:
+                    transactions[trans_id][1] = date_max
+                    transactions[trans_id][5] = last_action
+                    transactions[trans_id][6] = last_subcomponent                
  
         count += 1          
         if count % chunk_size == 0:
