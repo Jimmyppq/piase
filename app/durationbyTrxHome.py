@@ -4,14 +4,20 @@ from datetime import datetime
 from pathlib import Path
 import logging
 import time
+import configparser
 
+def load_config(config_file):
+    """Carga la configuración desde un archivo .ini."""
+    config = configparser.ConfigParser()
+    config.read(config_file)
+    return config['DURATION']
 
 def setup_logging():
     # Configuración del logger principal
     logger = logging.getLogger('logger_principal')
     logger.setLevel(logging.INFO)
     # Handler para el primer archivo de log
-    file_handler = logging.FileHandler('../logs/log19122023.log')
+    file_handler = logging.FileHandler(config['LogFilePath'])
     formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
     file_handler.setFormatter(formatter)
     logger.addHandler(file_handler)
@@ -20,7 +26,7 @@ def setup_logging():
     otro_logger = logging.getLogger('otro_logger')
     otro_logger.setLevel(logging.INFO)
     # Handler para el segundo archivo de log
-    otro_file_handler = logging.FileHandler('../logs/log_read_speed-1.log')
+    otro_file_handler = logging.FileHandler(config['LogReadFilePath'])
     otro_file_handler.setFormatter(formatter)
     otro_logger.addHandler(otro_file_handler)
     
@@ -28,7 +34,7 @@ def setup_logging():
     logger_write = logging.getLogger('logger_write')
     logger_write.setLevel(logging.INFO)
     # Handler para el segundo archivo de log
-    logger_writehandler = logging.FileHandler('../logs/log_write_19122023.log')
+    logger_writehandler = logging.FileHandler(config['LogWriteFilePath'])
     logger_writehandler.setFormatter(formatter)
     logger_write.addHandler(logger_writehandler)
 
@@ -36,6 +42,7 @@ def setup_logging():
     logger.info('--- Starting script ---')
 
     return logger, otro_logger, logger_write
+
 
 def compile_regular_expresion ():
     global pattern
@@ -202,10 +209,10 @@ def write_result (transactions):
     
     # Append to the main DataFrame
     if countFiles > 0 :    
-        transactions_df.to_csv("../output/result_19122023.csv", mode='a', header=False, index=True)
+        transactions_df.to_csv(config['OutputFilePath'], mode='a', header=False, index=True)
         logger_write.info(f"CountFile: {countFiles}. Records: {transactions_df.shape[0]}")
     else :
-        transactions_df.to_csv("../output/result_19122023.csv", mode='w', header=True, index=True)
+        transactions_df.to_csv(config['OutputFilePath'], mode='w', header=True, index=True)
         logger_write.info(f"CountFile: {countFiles}. Records: {transactions_df.shape[0]}")
 
 #deprecated         
@@ -321,10 +328,10 @@ def process_log_file33(file_path):
 
     # Append to the main DataFrame
     if countFiles > 0 :    
-        transactions_df.to_csv("../output/result_process_log_file33.csv", mode='a', header=False, index=True)
+        transactions_df.to_csv(config['OutputFilePath'], mode='a', header=False, index=True)
         logger_write.info(f"CountFile: {countFiles}. File: {file_path}. records: {transactions_df.shape[0]}")
     else :
-        transactions_df.to_csv("../output/result_process_log_file33.csv", mode='w', header=True, index=True)
+        transactions_df.to_csv(config['OutputFilePath'], mode='w', header=True, index=True)
         logger_write.info(f"CountFile: {countFiles}. File: {file_path}. records: {transactions_df.shape[0]}")
         
     #all_transactions_df = pd.concat([all_transactions_df, transactions_df])
@@ -356,7 +363,7 @@ def process_log_files(directory_path, file_pattern):
         if countFiles % 2 == 0:
             logger_principal.info(f'Ha terminado de procesar {countFiles} archivos...')
         
-
+config = load_config('./config/config.ini')
 logger_principal, logger_files, logger_write = setup_logging()
 compile_regular_expresion()
 
@@ -366,7 +373,7 @@ countFiles = 0
 # Call the function with your directory path and file pattern
 #process_log_files("/mnt/NAS/BANORTE/259_LATSUP-2959_Monitoreo upselling 300TPS entorno Producción/2023-08-04 01 L01/F1", "*act*.log")
 #ofi
-process_log_files("/mnt/NAS/BANORTE/265_LATSUP-3186_Recolección Logs peak Transaccional Octubre 2023/2023-10-19 01 L01/SDP_depurados_DR/FASE01","*.log")
+process_log_files(config['InputPath'], config['FilePattern'])
 #process_log_files("../data/", "escenario4*.log")
 #home
 #process_log_files("/Users/colombia-01/OneDrive - Latinia Interactive Business, S.A/Jimmy/brrMac/logsPrueba/", "logActDR.log")
