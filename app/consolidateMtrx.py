@@ -25,7 +25,7 @@ def load_config(config_file):
     """Carga la configuración desde un archivo .ini."""
     config = configparser.ConfigParser()
     config.read(config_file)
-    return config['DEFAULT']
+    return config['CONSOLIDATE']
 
 def process_log_line(line):
     """Procesa una línea del archivo de log y retorna sus componentes."""
@@ -73,27 +73,40 @@ def consolidate_transactions(generator, output_file_path, chunk_size, logger):
     first_chunk = True  
 
     for trans_id, date_min, date_max, priority, first_action, last_action, \
-        first_subcomponent, last_subcomponent, duration, mnewtrans in generator:
+        first_subcomponent, last_subcomponent, duration, mnewtrans,countSend  in generator:
 
         # Manejar transacciones transformadas
+       
         if mnewtrans:
-            current_value = transactions.pop(mnewtrans, None)
+            current_value = transactions.pop(mnewtrans, None)            
             if current_value is not None:
-                transactions[trans_id] = current_value
+                if trans_id in transactions:
+                    if current_value[3] == 'NEWTRANS' or current_value[0] < transactions[trans_id][0]:
+                        transactions[trans_id][0] = current_value[0] #date_min
+                        transactions[trans_id][3] = current_value[3] #first_action
+                        transactions[trans_id][4] = current_value[4] #first_subcomponent
+                    
+                    if current_value[5] == 'SEND' or current_value[1]>transactions[trans_id][1]:
+                        transactions[trans_id][1] = current_value[1] #date_max
+                        transactions[trans_id][5] = current_value[5] #last_action
+                        transactions[trans_id][6] = current_value[5] #last_subcomponent     
+                else:
+                    transactions[trans_id] = current_value
 
         if trans_id not in transactions:
             transactions[trans_id] = [date_min, date_max, priority, first_action, 
-                                    first_subcomponent, last_action, last_subcomponent]
+                                    first_subcomponent, last_action, last_subcomponent, countSend]
         else:            
             # Comprobar y actualizar la fecha mínima y sus componentes asociados
-            if first_action == 'NEWTRANS' or date_min < transactions[trans_id][0]:
-                transactions[trans_id][0] = date_min
-                transactions[trans_id][3] = first_action
-                transactions[trans_id][4] = first_subcomponent
+            if transactions[trans_id][3] != 'NEWTRANS':
+                if date_min < transactions[trans_id][0] or first_action == 'NEWTRANS' :
+                    transactions[trans_id][0] = date_min
+                    transactions[trans_id][3] = first_action
+                    transactions[trans_id][4] = first_subcomponent
             
             if transactions[trans_id][5] != 'SEND':
                 # Comprobar y actualizar la fecha máxima y sus componentes asociados
-                if date_max > transactions[trans_id][1]:
+                if date_max > transactions[trans_id][1] or last_action == 'SEND':
                     transactions[trans_id][1] = date_max
                     transactions[trans_id][5] = last_action
                     transactions[trans_id][6] = last_subcomponent                
@@ -107,7 +120,7 @@ def consolidate_transactions(generator, output_file_path, chunk_size, logger):
             df = pd.DataFrame.from_dict(transactions, orient='index',
                                         columns=['date_min', 'date_max', 'priority', 
                                                     'first_action', 'first_subcomponent', 
-                                                    'last_action', 'last_subcomponent', 'Duration'])
+                                                    'last_action', 'last_subcomponent', 'Duration', 'countSend'])
             df.reset_index(inplace=True)
             df.rename(columns={'index': 'Transaction ID'}, inplace=True)                
             
@@ -132,7 +145,7 @@ def consolidate_transactions(generator, output_file_path, chunk_size, logger):
         df = pd.DataFrame.from_dict(transactions, orient='index',
                                     columns=['date_min', 'date_max', 'priority', 
                                              'first_action', 'first_subcomponent', 
-                                             'last_action', 'last_subcomponent', 'Duration'])
+                                             'last_action', 'last_subcomponent', 'Duration','countSend'])
         
         df.reset_index(inplace=True)
         df.rename(columns={'index': 'Transaction ID'}, inplace=True)
@@ -166,7 +179,7 @@ def find_filesGenerator(directory, pattern):
 
 def main():
     
-    config = load_config('./config/config.ini')
+    config = load_config('../config/config.ini')
     log_files = find_files(config['InputDirectory'], config['FilePattern'])
     log_interval = int(config['LogInterval'])
     output_result = config['OutputResult']
