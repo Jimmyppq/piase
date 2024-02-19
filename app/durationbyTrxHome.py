@@ -5,6 +5,7 @@ from pathlib import Path
 import logging
 import time
 import configparser
+from collections import defaultdict
 
 def load_config(config_file):
     """Carga la configuración desde un archivo .ini."""
@@ -133,6 +134,9 @@ def log_file_generator(file_path):
 
 def process_transactions(file_path):
     transactions = {}
+
+    transactions_collections = defaultdict(list)
+
     for details in log_file_generator(file_path):
         transaction_id = details['transaction_id']
         timestamp = details['timestamp']
@@ -158,8 +162,24 @@ def process_transactions(file_path):
                 'last_subcomponent': subcomponent,
                 'send': True if action in ('SEND', 'REJECTED') else False, # Whether the SEND or REJECTED action has been encountered
                 'newtrans': False,  # Whether the NEWTRANS
-                'mnewtrans':mnewtrans_id
+                'mnewtrans':mnewtrans_id,
+                'countSend':0
             }
+
+            '''transactions_collections[transaction_id].append({
+                'date_min': timestamp,
+                'date_max': timestamp,
+                'priority': priority if priority != -1 else None,
+                'first_action': action,
+                'last_action': action,
+                'first_subcomponent': subcomponent,
+                'last_subcomponent': subcomponent,
+                'send': True if action in ('SEND', 'REJECTED') else False, # Whether the SEND or REJECTED action has been encountered
+                'newtrans': False,  # Whether the NEWTRANS
+                'mnewtrans':mnewtrans_id,
+                'countSend':0
+            })'''
+
         else:
             # If the transaction is in the dictionary, update it
             transaction = transactions[transaction_id]
@@ -189,6 +209,8 @@ def process_transactions(file_path):
             # Update SEND status
             if action in ['SEND','REJECTED']:
                 transaction['send'] = True
+                transaction['countSend']=transaction['countSend']+1
+                
                 
     write_result (transactions)              
               
@@ -205,7 +227,7 @@ def write_result (transactions):
     transactions_df['priority'] = transactions_df['priority'].fillna(-1)
 
     # Rearrange columns
-    transactions_df = transactions_df[['date_min', 'date_max', 'priority', 'first_action', 'last_action', 'first_subcomponent', 'last_subcomponent', 'Duration','mnewtrans']]
+    transactions_df = transactions_df[['date_min', 'date_max', 'priority', 'first_action', 'last_action', 'first_subcomponent', 'last_subcomponent', 'Duration','mnewtrans','countSend']]
     
     # Append to the main DataFrame
     if countFiles > 0 :    
@@ -363,7 +385,7 @@ def process_log_files(directory_path, file_pattern):
         if countFiles % 2 == 0:
             logger_principal.info(f'Ha terminado de procesar {countFiles} archivos...')
         
-config = load_config('./config/config.ini')
+config = load_config('../config/config.ini')
 logger_principal, logger_files, logger_write = setup_logging()
 compile_regular_expresion()
 
