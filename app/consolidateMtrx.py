@@ -68,6 +68,7 @@ def log_file_generator(file_path, log_interval, logger):
 def consolidate_transactions(generator, output_file_path, chunk_size, logger):
     """Consolida las transacciones procesadas por el generador."""
     transactions = {}
+    trx_mnewtrans = {} #diccionario para gestionar mnewTrans y newtrans cuando una mnewtrans se encuentra primero que su correspondiente trans_id
     count = 0
     block = 1
     first_chunk = True  
@@ -76,7 +77,6 @@ def consolidate_transactions(generator, output_file_path, chunk_size, logger):
         first_subcomponent, last_subcomponent, duration, mnewtrans,countSend  in generator:
 
         # Manejar transacciones transformadas
-       
         if mnewtrans:
             current_value = transactions.pop(mnewtrans, None)            
             if current_value is not None:
@@ -92,7 +92,15 @@ def consolidate_transactions(generator, output_file_path, chunk_size, logger):
                         transactions[trans_id][6] = current_value[5] #last_subcomponent     
                 else:
                     transactions[trans_id] = current_value
-
+            else:               
+               trx_mnewtrans[mnewtrans]= trans_id
+        else:
+            if trans_id in trx_mnewtrans:
+                trx=trx_mnewtrans.pop(trans_id,None)               
+                current_value = transactions.pop(trx, None) 
+                if current_value is not None:
+                    transactions[trans_id] = current_value
+ 
         if trans_id not in transactions:
             transactions[trans_id] = [date_min, date_max, priority, first_action, 
                                     first_subcomponent, last_action, last_subcomponent, countSend]
@@ -109,8 +117,9 @@ def consolidate_transactions(generator, output_file_path, chunk_size, logger):
                 if date_max > transactions[trans_id][1] or last_action == 'SEND':
                     transactions[trans_id][1] = date_max
                     transactions[trans_id][5] = last_action
-                    transactions[trans_id][6] = last_subcomponent                
- 
+                    transactions[trans_id][6] = last_subcomponent             
+
+
         count += 1          
         if count % chunk_size == 0:
             # Calcular la duración para cada transacción
@@ -120,7 +129,7 @@ def consolidate_transactions(generator, output_file_path, chunk_size, logger):
             df = pd.DataFrame.from_dict(transactions, orient='index',
                                         columns=['date_min', 'date_max', 'priority', 
                                                     'first_action', 'first_subcomponent', 
-                                                    'last_action', 'last_subcomponent', 'Duration', 'countSend'])
+                                                    'last_action', 'last_subcomponent', 'countSend', 'Duration'])
             df.reset_index(inplace=True)
             df.rename(columns={'index': 'Transaction ID'}, inplace=True)                
             
@@ -145,13 +154,13 @@ def consolidate_transactions(generator, output_file_path, chunk_size, logger):
         df = pd.DataFrame.from_dict(transactions, orient='index',
                                     columns=['date_min', 'date_max', 'priority', 
                                              'first_action', 'first_subcomponent', 
-                                             'last_action', 'last_subcomponent', 'Duration','countSend'])
+                                             'last_action', 'last_subcomponent', 'countSend','Duration'])
         
         df.reset_index(inplace=True)
         df.rename(columns={'index': 'Transaction ID'}, inplace=True)
         
         if first_chunk:
-            df.to_csv(output_file_path, mode='w', index=False, header=False)
+            df.to_csv(output_file_path, mode='w', index=False, header=True)
         else:
             df.to_csv(output_file_path, mode='a', index=False, header=False)  
             
@@ -179,7 +188,7 @@ def find_filesGenerator(directory, pattern):
 
 def main():
     
-    config = load_config('../config/config.ini')
+    config = load_config('./config/config.ini')
     log_files = find_files(config['InputDirectory'], config['FilePattern'])
     log_interval = int(config['LogInterval'])
     output_result = config['OutputResult']
