@@ -24,12 +24,12 @@
 
 # Función para ejecutar durationbyTrxHome
 run_duration() {
-    nohup python3.11 ./app/durationbyTrxHome.py > ./logs/output_durationbyTrxHome.log 2>&1 &
+    nohup python3.11 ./app/durationtrxlimsp.py > ./logs/output_durationtrxlimsp.log 2>&1 &
 }
 
 # Función para ejecutar consolidate
 run_consolidate() {
-    nohup python3.11 ./app/consolidateMtrx.py > ./logs/output_consolidate.log 2>&1 &
+    nohup python3.11 ./app/consolidateTrx.py > ./logs/output_consolidateTrx.log 2>&1 &
 }
 
 # Verifica el argumento pasado al script
