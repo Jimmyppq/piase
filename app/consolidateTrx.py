@@ -30,7 +30,7 @@ def load_config(config_file):
 def process_log_line(line):
     """Procesa una línea del archivo de log y retorna sus componentes."""
     components = line.strip().split(',')
-    if len(components) < 10:  # Filtrar líneas incompletas o mal formadas
+    if len(components) < 11:  # Filtrar líneas incompletas o mal formadas
         return None
     
     # Formatos de fecha con y sin fracción de segundo
@@ -52,6 +52,7 @@ def process_log_line(line):
         except ValueError:
             pass  # Intenta con el siguiente formato si ocurre un error
     
+    #date_in_collector
     if components[11].strip():  # Verifica si hay un valor no vacío
         for fmt in date_formats:
             try:
@@ -216,6 +217,7 @@ def consolidate_transactions(generator, output_file_path, chunk_size, logger):
                         transactions[trans_id][1] = current_value[1] #date_max
                         transactions[trans_id][5] = current_value[5] #last_action
                         transactions[trans_id][6] = current_value[6] #last_subcomponent
+                        transactions[trans_id][8] = current_value [8] #date_in_collector
                         transactions[trans_id][7] +=1    
                 else:                    
                     transactions[trans_id] = current_value
