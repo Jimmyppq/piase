@@ -233,11 +233,9 @@ def consolidate_transactions(generator, output_file_path, chunk_size, logger):
     
         if trans_id not in transactions:           
             transactions[trans_id] = [date_min, date_max, priority, first_action, 
-                                    first_subcomponent, last_action, last_subcomponent, countSend,date_in_collecctor]
-           
+                                    first_subcomponent, last_action, last_subcomponent, countSend,date_in_collecctor]           
         else:          
-            # Comprobar y actualizar la fecha mínima y sus componentes asociados
-            
+            # Comprobar y actualizar la fecha mínima y sus componentes asociados            
             if transactions[trans_id][3] != 'NEWTRANS':
                 if date_min < transactions[trans_id][0] or first_action == 'NEWTRANS' :
                     transactions[trans_id][0] = date_min
@@ -249,14 +247,12 @@ def consolidate_transactions(generator, output_file_path, chunk_size, logger):
                 if date_max > transactions[trans_id][1] or last_action == 'SEND':
                     transactions[trans_id][1] = date_max
                     transactions[trans_id][5] = last_action
-                    transactions[trans_id][6] = last_subcomponent
-                    
-                    transactions[trans_id][7] +=1 
-                    if transactions[trans_id][8] is None and date_in_collecctor is not None:
-                        transactions[trans_id][8] = date_in_collecctor
-                        
-
-
+                    transactions[trans_id][6] = last_subcomponent                    
+                    transactions[trans_id][7] +=1  
+                               
+            if date_in_collecctor is not None :
+                transactions[trans_id][8] = date_in_collecctor
+                       
 
         count += 1          
         if count % chunk_size == 0:
