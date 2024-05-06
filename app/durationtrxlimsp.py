@@ -3,7 +3,7 @@ import re
 from datetime import datetime
 from pathlib import Path
 import logging
-import json
+import os
 import configparser
 from collections import defaultdict
 
@@ -31,7 +31,7 @@ def setup_logging():
     otro_file_handler.setFormatter(formatter)
     otro_logger.addHandler(otro_file_handler)
     
-    # Configuración del segundo logger
+    # Configuración del tercer logger
     logger_write = logging.getLogger('logger_write')
     logger_write.setLevel(logging.INFO)
     # Handler para el segundo archivo de log
@@ -198,9 +198,13 @@ def process_transactions(file_path):
         # Establecer 'date_in_collector' si las condiciones coinciden
         if action == 'OUT' and subcomponent == 'FailOverManager':
             transaction['date_in_collector'] = timestamp
-            
-
-    write_result (transactions) 
+    
+    cantidad_registros = len(transactions)
+    if (cantidad_registros > 0):
+        write_result (transactions)
+    else:
+        logger_files.warning('no hay transacciones en este archivo')
+        
                  
               
 def write_result(transactions):
@@ -210,9 +214,8 @@ def write_result(transactions):
 
     # Verifica y convierte 'date_in_collector' a datetime, maneja la ausencia de la columna
     #if 'date_in_collector' in transactions_df.columns:
-    transactions_df['date_in_collector'] = pd.to_datetime(transactions_df['date_in_collector'], errors='coerce')
 
-    # Calculate duration in seconds
+    transactions_df['date_in_collector'] = pd.to_datetime(transactions_df['date_in_collector'], errors='coerce')
     transactions_df['Duration'] = (transactions_df['date_max'] - transactions_df['date_min']).dt.total_seconds()
 
     # Calcula 'duration_limsp' donde 'date_in_collector' es válido
@@ -221,7 +224,10 @@ def write_result(transactions):
     transactions_df.loc[mask_valid_date, 'duration_limsp'] = (transactions_df['date_in_collector'] - transactions_df['date_min']).dt.total_seconds()
 
     # Replace NaN priorities with -1
-    transactions_df['priority'] = transactions_df['priority'].fillna(-1)
+    if 'priority' in transactions_df.columns:
+        transactions_df['priority'] = transactions_df['priority'].fillna(-1)
+    else:
+        transactions_df['priority'] = -1
 
     # Rearrange columns, asegurándose de que todas las columnas necesarias existan
     columns_order = [
@@ -235,7 +241,7 @@ def write_result(transactions):
     write_mode = 'a' if countFiles > 0 else 'w'
     header = countFiles == 0
     transactions_df.to_csv(config['OutputFilePath'], mode=write_mode, header=header, index=True)
-    logger_write.info(f"CountFile: {countFiles}. Records: {transactions_df.shape[0]}")
+    logger_write.info(f"CountFile: {countFiles}. Records: {transactions_df.shape[0]} -- FileName: {file_name}")
 
 
 def process_log_files(directory_path, file_pattern):
@@ -243,6 +249,7 @@ def process_log_files(directory_path, file_pattern):
     This function processes all log files in a directory and its subdirectories that match a given pattern.
     """
     global countFiles
+    global file_name
     
     logger_principal.info('Starting processing log Files...')
     # Get the directory path
@@ -260,11 +267,15 @@ def process_log_files(directory_path, file_pattern):
     # Iterate over each file in the directory and its subdirectories
     for file_path in directory_path.rglob(file_pattern):
         # Process the log file
+        directory_name, file_name = os.path.split(file_path)
+        logger_files.info(f'Leyendo: Directorio: {directory_name} -- Archivo: {file_name}')        
         process_transactions(file_path)       
         countFiles+=1
-        if countFiles % 5 == 0:
+        if countFiles % 20 == 0:
             logger_principal.info(f'Ha terminado de procesar {countFiles} archivos...')
-        
+
+
+#main   
 config = load_config('./config/config.ini')
 logger_principal, logger_files, logger_write = setup_logging()
 compile_regular_expresion()
