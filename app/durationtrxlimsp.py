@@ -237,6 +237,8 @@ def write_result(transactions):
     ]
     transactions_df = transactions_df[columns_order]
 
+    transactions_df['node_name'] = node_name
+
     # Append or write to the CSV file
     write_mode = 'a' if countFiles > 0 else 'w'
     header = countFiles == 0
@@ -250,6 +252,7 @@ def process_log_files(directory_path, file_pattern):
     """
     global countFiles
     global file_name
+    global node_name
     
     logger_principal.info('Starting processing log Files...')
     # Get the directory path
@@ -267,8 +270,11 @@ def process_log_files(directory_path, file_pattern):
     # Iterate over each file in the directory and its subdirectories
     for file_path in directory_path.rglob(file_pattern):
         # Process the log file
-        directory_name, file_name = os.path.split(file_path)
-        logger_files.info(f'Leyendo: Directorio: {directory_name} -- Archivo: {file_name}')        
+        file_path = Path(file_path)
+        node_name = file_path.parent.name  # Obtener sólo el último directorio
+        file_name = file_path.name
+        path, file_name = os.path.split(file_path)
+        logger_files.info(f'Nodo: {node_name} -- Archivo: {file_name} -- Path: {path}')        
         process_transactions(file_path)       
         countFiles+=1
         if countFiles % 20 == 0:

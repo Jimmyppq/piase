@@ -198,12 +198,12 @@ def consolidate_transactions(generator, output_file_path, chunk_size, logger):
     first_chunk = True  
 
     for trans_id, date_min, date_max, priority, first_action, last_action, \
-        first_subcomponent, last_subcomponent, duration, mnewtrans,countSend,date_in_collecctor,duration_limsp  in generator:
+        first_subcomponent, last_subcomponent, duration, mnewtrans,countSend,date_in_collecctor,duration_limsp,node_name  in generator:
         # Convertir countSend a entero
         countSend = int(countSend) if countSend.isdigit() else 0  # Asegura que countSend es numérico antes de convertir
         # Manejar transacciones transformadas
         # current_value[8]: date_in_collecctor
-        # current_value[9]: duration_limsp
+        # current_value[9]: duration_limsp        
         if mnewtrans:
             current_value = transactions.pop(mnewtrans, None)            
             if current_value is not None:
@@ -233,7 +233,7 @@ def consolidate_transactions(generator, output_file_path, chunk_size, logger):
     
         if trans_id not in transactions:           
             transactions[trans_id] = [date_min, date_max, priority, first_action, 
-                                    first_subcomponent, last_action, last_subcomponent, countSend,date_in_collecctor]           
+                                    first_subcomponent, last_action, last_subcomponent, countSend,date_in_collecctor, node_name]           
         else:          
             # Comprobar y actualizar la fecha mínima y sus componentes asociados            
             if transactions[trans_id][3] != 'NEWTRANS':
@@ -252,7 +252,8 @@ def consolidate_transactions(generator, output_file_path, chunk_size, logger):
                                
             if date_in_collecctor is not None :
                 transactions[trans_id][8] = date_in_collecctor
-                       
+
+             
 
         count += 1          
         if count % chunk_size == 0:
@@ -263,11 +264,24 @@ def consolidate_transactions(generator, output_file_path, chunk_size, logger):
                 duration_limsp = (values[8] - values[0]).total_seconds() if values[8] else 0
                 transactions[trans_id].append(duration)
                 transactions[trans_id].append(duration_limsp)
-            
+
+
             df = pd.DataFrame.from_dict(transactions, orient='index',
+                            columns=['date_min', 'date_max', 'priority', 'first_action', 
+                                     'first_subcomponent', 'last_action', 'last_subcomponent', 
+                                     'countSend', 'date_in_collector', 'node_name', 'Duration', 'duration_limsp'])
+
+            # Reorganiza las columnas para mover 'node_name' al final
+            column_order = [col for col in df.columns if col != 'node_name'] + ['node_name']
+            df = df[column_order]
+
+
+            '''df = pd.DataFrame.from_dict(transactions, orient='index',
                                         columns=['date_min', 'date_max', 'priority', 
                                                     'first_action', 'first_subcomponent', 
                                                     'last_action', 'last_subcomponent', 'countSend', 'date_in_collecctor','Duration','duration_limsp'])
+            '''
+            
             df.reset_index(inplace=True)
             df.rename(columns={'index': 'Transaction ID'}, inplace=True)                
             
@@ -295,29 +309,23 @@ def consolidate_transactions(generator, output_file_path, chunk_size, logger):
             transactions[trans_id].append(duration)
             transactions[trans_id].append(duration_limsp)
             
-        # Asumiendo que 'transactions' es un diccionario de diccionarios
-        #imprimir transactions
-        #------------------------------------------------------------------------------------
-        '''first_key = next(iter(transactions))  # Obtener la primera clave del diccionario
-        first_entry = transactions[first_key]  # Obtener la primera entrada (que es una lista)
-
-        print(f"Número de columnas: {len(first_entry)}")
-
-        print("\nPrimeras 2 entradas (similar a 'head'):")
-        count = 0
-        for trans_id, entry in transactions.items():
-            print(f"{trans_id}: {entry}")
-            count += 1
-            if count >= 2:
-                break
-        '''
-       #------------------------------------------------------------------------------------
 
 
         df = pd.DataFrame.from_dict(transactions, orient='index',
+                        columns=['date_min', 'date_max', 'priority', 'first_action', 
+                                    'first_subcomponent', 'last_action', 'last_subcomponent', 
+                                    'countSend', 'date_in_collector', 'node_name', 'Duration', 'duration_limsp'])
+
+        # Reorganiza las columnas para mover 'node_name' al final
+        column_order = [col for col in df.columns if col != 'node_name'] + ['node_name']
+        df = df[column_order]
+
+
+        '''df = pd.DataFrame.from_dict(transactions, orient='index',
                                     columns=['date_min', 'date_max', 'priority', 
                                              'first_action', 'first_subcomponent', 
                                              'last_action', 'last_subcomponent', 'countSend','date_in_collecctor','Duration','duration_limsp'])
+        '''
         
         df.reset_index(inplace=True)
         df.rename(columns={'index': 'Transaction ID'}, inplace=True)
