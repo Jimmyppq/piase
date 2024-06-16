@@ -190,7 +190,8 @@ def process_transactions(file_path):
         transaction['countSend'] += action == 'SEND'
 
         # Actualizar la prioridad, mnewtrans y contar las acciones SEND
-        transaction['priority'] = priority
+        if priority != -1:
+            transaction['priority'] = priority
 
         if mtransaction_id is not None:
             transaction['mnewtrans'] = mtransaction_id
