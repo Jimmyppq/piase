@@ -4,6 +4,7 @@ from datetime import datetime
 from pathlib import Path
 import logging
 import os
+import sys
 import configparser
 from collections import defaultdict
 
@@ -44,27 +45,22 @@ def setup_logging():
 
     return logger, otro_logger, logger_write
 
-def compile_regular_expresion ():
+def compile_regular_expresion():
     global pattern
-    #compilar la expresión regular
     pattern = re.compile(r"\[(?P<timestamp>\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}(?:\.\d{3})?)\]\s+(?P<action>.+?)\s+(?P<subcomponent>.+?)\s+(?P<details>.+)")
 
 def process_log_line(line):
     """
-    This function processes a log line and extracts relevant details.
+    Esta función procesa una línea de log y extrae los detalles relevantes.
     """
-    # Regular expression for finding transaction ID and priority
     transaction_pattern = r"(transaction:)([^ ]*)"
     priority_pattern = r"pri:(\d+)"
 
-    # Parse the log line
     match = pattern.match(line)
 
     if match:
-        # Extract details
         details = match.groupdict()
 
-        # Find transaction ID if present
         transaction_matches = re.finditer(transaction_pattern, details['details'])
         transaction_ids = []
         for transaction_match in transaction_matches:
@@ -82,7 +78,6 @@ def process_log_line(line):
         else:
             details['Mtransaction_id'] = None            
 
-        # Find priority if present
         priority_match = re.search(priority_pattern, details['details'])
         if priority_match:
             details['priority'] = int(priority_match.group(1))
@@ -90,10 +85,8 @@ def process_log_line(line):
             details['priority'] = -1
 
         if '.' in details['timestamp']:
-            # Format with milliseconds
             details['timestamp'] = datetime.strptime(details['timestamp'], "%Y/%m/%d %H:%M:%S.%f")
         else:
-            # Format without milliseconds
             details['timestamp'] = datetime.strptime(details['timestamp'], "%Y/%m/%d %H:%M:%S")
 
         return details
@@ -101,11 +94,10 @@ def process_log_line(line):
     return None
 
 def log_file_generator(file_path):
-    # Generador para leer y procesar archivos de log
     with open(file_path, 'r') as file:
         for line in file:
             processed_line = process_log_line(line)
-            if processed_line:  # Filtra líneas que no contienen un ID de transacción
+            if processed_line:
                 yield processed_line
 
 def process_transactions(file_path):
@@ -220,7 +212,6 @@ def write_result():
     transactions_df.to_csv(config['OutputFilePath'], mode='w', header=True, index=False)
     logger_write.info(f"Total Records: {transactions_df.shape[0]} -- FileName: {config['OutputFilePath']}")
 
-
 def process_log_files(directory_path, file_pattern):
     global countFiles
     global file_name
@@ -233,6 +224,7 @@ def process_log_files(directory_path, file_pattern):
     
     if not matching_files:
         logging.error('No files found. Terminating the script.')
+        sys.exit(1)
     
     logger_principal.info(f'File search results: {len(matching_files)} files...')
     for file_path in directory_path.rglob(file_pattern):
@@ -240,11 +232,15 @@ def process_log_files(directory_path, file_pattern):
         node_name = file_path.parent.name
         file_name = file_path.name
         path, file_name = os.path.split(file_path)
-        logger_files.info(f'Nodo: {node_name} -- Archivo: {file_name} -- Path: {path}')        
-        process_transactions(file_path)       
-        countFiles += 1
-        if countFiles % 20 == 0:
-            logger_principal.info(f'Ha terminado de procesar {countFiles} archivos...')
+        logger_files.info(f'Nodo: {node_name} -- Archivo: {file_name} -- Path: {path}')   
+        try:
+            process_transactions(file_path)
+            countFiles += 1
+            if countFiles % 20 == 0:
+                logger_principal.info(f'Ha terminado de procesar {countFiles} archivos…')
+        except Exception as e:
+            logger_files.error(f'Error processing file {file_name}: {e}')
+            #sys.exit(1)
     
     # Verificar si el archivo existe y eliminarlo si es necesario
     if os.path.exists(config['OutputFilePath']):
@@ -272,15 +268,31 @@ global_transactions = defaultdict(lambda: {
 
 
 #main
-config = load_config('./config/config.ini')
+try:
+    config = load_config('./config/config.ini')
+except FileNotFoundError as e:
+    print(f"Error cargando la configuración: Archivo no encontrado: {e}")
+    sys.exit(1)
+except KeyError as e:
+    print(f"Error cargando la configuración: Clave faltante en el archivo de configuración: {e}")
+    sys.exit(1)
+except Exception as e:
+    print(f"Error inesperado cargando la configuración: {e}")
+    sys.exit(1)
+
 logger_principal, logger_files, logger_write = setup_logging()
 compile_regular_expresion()
 
 countFiles = 0
 
-process_log_files(config['InputPath'], config['FilePattern'] )
+try:
+    process_log_files(config['InputPath'], config['FilePattern'] )
+except Exception as e:
+    logger_principal.error(f'Error processing log files: {e}')
+    sys.exit(1)
 
 logger_principal.info('Processing completed…')
 logger_principal.info('Saving results…')
 archivoResultante = config['OutputFilePath']
 logger_principal.info(f'Result stored {archivoResultante}')
+sys.exit(0)

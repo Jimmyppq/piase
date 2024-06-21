@@ -1,7 +1,7 @@
 import configparser
 import fnmatch
 import logging
-
+import sys
 from datetime import datetime
 import os
 
@@ -237,24 +237,36 @@ def find_filesGenerator(directory, pattern):
                 yield filename
 
 def main():
-    
-    config = load_config('./config/config.ini')
-    log_files = find_files(config['InputDirectory'], config['FilePattern'])
-    log_interval = int(config['LogInterval'])
-    output_result = config['OutputResult']
-    log_directory = config['LogDirectory']
-    filelog = config['logName']
-    chunk_size = int(config['Chunk_size_write'])
+    try:
+        config = load_config('./config/config.ini')
+        log_files = find_files(config['InputDirectory'], config['FilePattern'])
+        log_interval = int(config['LogInterval'])
+        output_result = config['OutputResult']
+        log_directory = config['LogDirectory']
+        filelog = config['logName']
+        chunk_size = int(config['Chunk_size_write'])
 
-    logger = setup_logger(log_directory,filelog)
-    logger.info(f"Start consolidate...")
-
-    for file_path in log_files:
-        generator = log_file_generator(file_path, log_interval, logger)
-        consolidate_transactions(generator,output_result,chunk_size,logger)
-    
-    logger.info(f"...Finish")        
+        logger = setup_logger(log_directory,filelog)
+        logger.info(f"Start consolidate...")
+        for file_path in log_files:
+            try:
+                generator = log_file_generator(file_path, log_interval, logger)
+                consolidate_transactions(generator, output_result, chunk_size, logger)
+            except Exception as e:
+                logger.error(f"Error procesando el archivo {file_path}: {e}")
+                sys.exit(1)
+        
+        logger.info(f"...Finish")
+    except FileNotFoundError as e:
+        print(f"Error cargando la configuración: Archivo no encontrado: {e}")
+        sys.exit(1)
+    except KeyError as e:
+        print(f"Error cargando la configuración: Clave faltante en el archivo de configuración: {e}")
+        sys.exit(1)
+    except Exception as e:
+        print(f"Error inesperado: {e}")
+        sys.exit(1)        
 
 if __name__ == "__main__":
     main()
-
+    sys.exit(0)
