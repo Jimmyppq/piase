@@ -4,8 +4,8 @@ from datetime import datetime
 from pathlib import Path
 import logging
 import os
-import sys
 import configparser
+import sys
 from collections import defaultdict
 
 def load_config(config_file):
@@ -14,36 +14,61 @@ def load_config(config_file):
     config.read(config_file)
     return config['DURATION']
 
-def setup_logging():
+def setup_logging(fecha_actual):
+    
+    output_logfile_path = config['LogFilePath']
+    nombre_archivo, extension_archivo = os.path.splitext(output_logfile_path)   
+    filenameLog = f"{nombre_archivo}_{fecha_actual}{extension_archivo}"
+
     # Configuración del logger principal
     logger = logging.getLogger('logger_principal')
     logger.setLevel(logging.INFO)
     # Handler para el primer archivo de log
-    file_handler = logging.FileHandler(config['LogFilePath'])
+    file_handler = logging.FileHandler(filenameLog)
     formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
     file_handler.setFormatter(formatter)
     logger.addHandler(file_handler)
 
     # Configuración del segundo logger
+    output_logfile_path = config['LogReadFilePath']
+    nombre_archivo, extension_archivo = os.path.splitext(output_logfile_path)   
+    filenameLog = f"{nombre_archivo}_{fecha_actual}{extension_archivo}"
+
     otro_logger = logging.getLogger('otro_logger')
     otro_logger.setLevel(logging.INFO)
     # Handler para el segundo archivo de log
-    otro_file_handler = logging.FileHandler(config['LogReadFilePath'])
+    otro_file_handler = logging.FileHandler(filenameLog)
     otro_file_handler.setFormatter(formatter)
     otro_logger.addHandler(otro_file_handler)
     
     # Configuración del tercer logger
+    output_logfile_path = config['LogWriteFilePath']
+    nombre_archivo, extension_archivo = os.path.splitext(output_logfile_path)   
+    filenameLog = f"{nombre_archivo}_{fecha_actual}{extension_archivo}"
+
     logger_write = logging.getLogger('logger_write')
     logger_write.setLevel(logging.INFO)
     # Handler para el segundo archivo de log
-    logger_writehandler = logging.FileHandler(config['LogWriteFilePath'])
+    logger_writehandler = logging.FileHandler(filenameLog)
     logger_writehandler.setFormatter(formatter)
     logger_write.addHandler(logger_writehandler)
+
+    # Configuración del logger transacciones descartadas
+    output_logfile_path = config['LogDiscardedTrx']
+    nombre_archivo, extension_archivo = os.path.splitext(output_logfile_path)   
+    filenameLog = f"{nombre_archivo}_{fecha_actual}{extension_archivo}"
+
+    logger_discarded = logging.getLogger('logger_discarded')
+    logger_discarded.setLevel(logging.INFO)
+    # Handler para el log de transacciones descartadas
+    logger_discardedhandler = logging.FileHandler(filenameLog)
+    logger_discardedhandler.setFormatter(formatter)
+    logger_discarded.addHandler(logger_discardedhandler)
 
     # Escribir un mensaje en el log principal
     logger.info('--- Starting script ---')
 
-    return logger, otro_logger, logger_write
+    return logger, otro_logger, logger_write, logger_discarded
 
 def compile_regular_expresion():
     global pattern
@@ -158,6 +183,8 @@ def process_transactions(file_path):
         logger_files.warning('No transactions in this file')
 
 def write_result():
+    global archivoResultante
+
     records = []
     for trans_id, data in global_transactions.items():
         if not data['send_times'] and not data['collector_times']:
@@ -205,17 +232,19 @@ def write_result():
                 }
                 records.append(record)
         else:
-            logger_files.warning(f'Mismatch in the number of send_times and collector_times for transaction ID: {trans_id}')
+            if discarded :
+                logger_discarded.warning(f'Transacción descartada, no tiene la misma cantidad de envíos que salidas del control de flujo: {trans_id}')
 
     transactions_df = pd.DataFrame(records)
 
-    transactions_df.to_csv(config['OutputFilePath'], mode='w', header=True, index=False)
-    logger_write.info(f"Total Records: {transactions_df.shape[0]} -- FileName: {config['OutputFilePath']}")
+    transactions_df.to_csv(archivoResultante, mode='w', header=True, index=False)
+    logger_write.info(f"Total Records: {transactions_df.shape[0]} -- FileName: {archivoResultante}")
 
 def process_log_files(directory_path, file_pattern):
     global countFiles
     global file_name
     global node_name
+    global archivoResultante
     
     logger_principal.info('Starting processing log Files...')
     directory_path = Path(directory_path)
@@ -243,8 +272,8 @@ def process_log_files(directory_path, file_pattern):
             #sys.exit(1)
     
     # Verificar si el archivo existe y eliminarlo si es necesario
-    if os.path.exists(config['OutputFilePath']):
-        os.remove(config['OutputFilePath'])
+    if os.path.exists(archivoResultante):
+        os.remove(archivoResultante)
     
     # Escribir el archivo CSV con todas las transacciones acumuladas
     write_result()
@@ -266,6 +295,7 @@ global_transactions = defaultdict(lambda: {
     'duration_limsp': None
 })
 
+archivoResultante =""
 
 #main
 try:
@@ -280,10 +310,21 @@ except Exception as e:
     print(f"Error inesperado cargando la configuración: {e}")
     sys.exit(1)
 
-logger_principal, logger_files, logger_write = setup_logging()
+fecha_actual = datetime.now().strftime("%d%m%Y")
+logger_principal, logger_files, logger_write, logger_discarded = setup_logging(fecha_actual)
 compile_regular_expresion()
-
+archivoResultante = config['OutputFilePath']
 countFiles = 0
+
+
+    
+try:
+    discarded = config.get('writeDiscarded', 'False')  # Por defecto es una cadena 'False'
+    discarded = discarded.lower() in ('true', '1', 'yes', 'on')  # Convierte a booleano
+except KeyError as e:
+    discarded = False
+
+
 
 try:
     process_log_files(config['InputPath'], config['FilePattern'] )
@@ -293,6 +334,5 @@ except Exception as e:
 
 logger_principal.info('Processing completed…')
 logger_principal.info('Saving results…')
-archivoResultante = config['OutputFilePath']
 logger_principal.info(f'Result stored {archivoResultante}')
 sys.exit(0)

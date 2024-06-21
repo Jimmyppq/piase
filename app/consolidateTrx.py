@@ -89,7 +89,7 @@ def consolidate_transactions(generator, output_file_path, chunk_size, logger):
     first_chunk = True  
 
     for trans_id, date_min, date_max, priority, first_action, last_action, \
-        first_subcomponent, last_subcomponent, duration, mnewtrans,countSend,date_in_collecctor,duration_limsp,node_name  in generator:
+        first_subcomponent, last_subcomponent, duration, mnewtrans,countSend,date_in_collecctor,duration_limsp,node_name,inot  in generator:
         # Convertir countSend a entero
         countSend = int(countSend) if countSend.isdigit() else 0  # Asegura que countSend es numérico antes de convertir
         # Manejar transacciones transformadas
