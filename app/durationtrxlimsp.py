@@ -146,6 +146,7 @@ def process_transactions(file_path):
             'collector_times': [],
             'mnewtrans': mtransaction_id,
             'countSend': 0,
+            'node_name': node_name,
             'send_times': []
         })
 
@@ -202,7 +203,7 @@ def write_result():
                 'countSend': data['countSend'],
                 'date_in_collector': data.get('date_in_collector'),
                 'duration_limsp': None,
-                'node_name': node_name,
+                'node_name': data['node_name'],
                 'inot': False
             }
             records.append(record)
@@ -227,7 +228,7 @@ def write_result():
                     'countSend': data['countSend'],
                     'date_in_collector': collector_time,
                     'duration_limsp': (collector_time - data['date_min']).total_seconds() if collector_time else None,
-                    'node_name': node_name,
+                    'node_name': data['node_name'],
                     'inot': inot_value
                 }
                 records.append(record)
@@ -252,7 +253,7 @@ def process_log_files(directory_path, file_pattern):
     matching_files = list(directory_path.rglob(file_pattern))
     
     if not matching_files:
-        logging.error('No files found. Terminating the script.')
+        logging.error(f'No files found. Terminating the script.{directory_path} archivos {file_pattern}')
         sys.exit(1)
     
     logger_principal.info(f'File search results: {len(matching_files)} files...')

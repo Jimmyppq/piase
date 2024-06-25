@@ -2,8 +2,11 @@ import configparser
 import fnmatch
 import logging
 import sys
+import traceback
+from collections import defaultdict
 from datetime import datetime
 import os
+import csv
 
 import pandas as pd
 
@@ -80,13 +83,50 @@ def log_file_generator(file_path, log_interval, logger):
                     logger.info(f"Se han procesado {line_count} líneas")
 
 
-def consolidate_transactions(generator, output_file_path, chunk_size, logger):
+def add_record_inot(transaction_id, date_max, last_action, last_subcomponent, date_in_collector, duration, duration_limsp, node_name):
+    trx_inots[transaction_id].append({        
+        "date_max": date_max,
+        "last_action": last_action,
+        "last_subcomponent": last_subcomponent,
+        "date_in_collector": date_in_collector,
+        "Duration": duration,
+        "duration_limsp": duration_limsp,
+        "node_name": node_name
+    })
+
+# Función para escribir el diccionario a un archivo CSV
+def write_to_csv(trx_inots, output_file, first_chunk):
+    all_records = []
+    for trans_id, records in trx_inots.items():
+        if records is None:
+            continue
+        for record in records:
+            record_with_index = {"Transaction ID": trans_id}
+            record_with_index.update(record)
+            all_records.append(record_with_index)
+
+    # Crear el DataFrame
+    df = pd.DataFrame(all_records)
+
+    # Determinar el modo de escritura y si debe incluir el encabezado
+    mode = 'w' if first_chunk else 'a'
+    header = first_chunk
+
+    # Escribir el DataFrame a un archivo CSV
+    df.to_csv(output_file, mode=mode, index=False, header=header, quoting=csv.QUOTE_NONE, escapechar='\\')
+
+
+
+def consolidate_transactions(generator, output_file_path,output_result_inot, chunk_size, logger):
     """Consolida las transacciones procesadas por el generador."""
+    global trx_inots
     transactions = {}
     trx_mnewtrans = {} #diccionario para gestionar mnewTrans y newtrans cuando una mnewtrans se encuentra primero que su correspondiente trans_id
+    trx_inots = defaultdict(list)
     count = 0
     block = 1
-    first_chunk = True  
+    first_chunk = True
+    first_chunk_inot = True
 
     for trans_id, date_min, date_max, priority, first_action, last_action, \
         first_subcomponent, last_subcomponent, duration, mnewtrans,countSend,date_in_collecctor,duration_limsp,node_name,inot  in generator:
@@ -94,59 +134,61 @@ def consolidate_transactions(generator, output_file_path, chunk_size, logger):
         countSend = int(countSend) if countSend.isdigit() else 0  # Asegura que countSend es numérico antes de convertir
         # Manejar transacciones transformadas
         # current_value[8]: date_in_collecctor
-        # current_value[9]: duration_limsp        
-        if mnewtrans:
-            current_value = transactions.pop(mnewtrans, None)            
-            if current_value is not None:
-                if trans_id in transactions:
-                    if current_value[3] == 'NEWTRANS' or current_value[0] < transactions[trans_id][0]:
-                        transactions[trans_id][0] = current_value[0] #date_min
-                        transactions[trans_id][3] = current_value[3] #first_action
-                        transactions[trans_id][4] = current_value[4] #first_subcomponent                        
-                    
-                    if current_value[5] == 'SEND' or current_value[1]>transactions[trans_id][1]:
-                        transactions[trans_id][1] = current_value[1] #date_max
-                        transactions[trans_id][5] = current_value[5] #last_action
-                        transactions[trans_id][6] = current_value[6] #last_subcomponent
-                        transactions[trans_id][8] = current_value [8] #date_in_collector
-                        transactions[trans_id][7] +=1    
-                else:                    
-                    transactions[trans_id] = current_value
-            else:               
-               trx_mnewtrans[mnewtrans]= trans_id
-        else:
-            if trans_id in trx_mnewtrans:
-                trx=trx_mnewtrans.pop(trans_id,None)
-                
-                current_value = transactions.pop(trx, None) 
+        # current_value[9]: duration_limsp
+        inot = inot.lower() == 'true'
+        if not inot:        
+            if mnewtrans:
+                current_value = transactions.pop(mnewtrans, None)         
+                trx_inots[trans_id]= trx_inots.pop(mnewtrans,None)        
                 if current_value is not None:
-                    transactions[trans_id] = current_value
-                    transactions[trans_id][2] = priority
-    
-        if trans_id not in transactions:           
-            transactions[trans_id] = [date_min, date_max, priority, first_action, 
-                                    first_subcomponent, last_action, last_subcomponent, countSend,date_in_collecctor, node_name]           
-        else:          
-            # Comprobar y actualizar la fecha mínima y sus componentes asociados            
-            if transactions[trans_id][3] != 'NEWTRANS':
-                if date_min < transactions[trans_id][0] or first_action == 'NEWTRANS' :
-                    transactions[trans_id][0] = date_min
-                    transactions[trans_id][3] = first_action
-                    transactions[trans_id][4] = first_subcomponent
-            
-            if transactions[trans_id][5] != 'SEND':
-                # Comprobar y actualizar la fecha máxima y sus componentes asociados
-                if date_max > transactions[trans_id][1] or last_action == 'SEND':
-                    transactions[trans_id][1] = date_max
-                    transactions[trans_id][5] = last_action
-                    transactions[trans_id][6] = last_subcomponent                    
-                    transactions[trans_id][7] +=1  
-                               
-            if date_in_collecctor is not None :
-                transactions[trans_id][8] = date_in_collecctor
-
-             
-
+                    if trans_id in transactions:
+                        if current_value[3] == 'NEWTRANS' or current_value[0] < transactions[trans_id][0]:
+                            transactions[trans_id][0] = current_value[0] #date_min
+                            transactions[trans_id][3] = current_value[3] #first_action
+                            transactions[trans_id][4] = current_value[4] #first_subcomponent         
+                        
+                        if current_value[5] == 'SEND' or current_value[1]>transactions[trans_id][1]:
+                            transactions[trans_id][1] = current_value[1] #date_max
+                            transactions[trans_id][5] = current_value[5] #last_action
+                            transactions[trans_id][6] = current_value[6] #last_subcomponent
+                            transactions[trans_id][8] = current_value [8] #date_in_collector
+                            transactions[trans_id][7] +=1    
+                    else:                    
+                        transactions[trans_id] = current_value
+                else:               
+                    trx_mnewtrans[mnewtrans]= trans_id
+            else:
+                if trans_id in trx_mnewtrans:
+                    trx=trx_mnewtrans.pop(trans_id,None)                    
+                    current_value = transactions.pop(trx, None) 
+                    if current_value is not None:
+                        transactions[trans_id] = current_value
+                        transactions[trans_id][2] = priority
+        
+            if trans_id not in transactions:           
+                transactions[trans_id] = [date_min, date_max, priority, first_action, 
+                                        first_subcomponent, last_action, last_subcomponent, countSend,date_in_collecctor, node_name]           
+            else:          
+                # Comprobar y actualizar la fecha mínima y sus componentes asociados            
+                if transactions[trans_id][3] != 'NEWTRANS':
+                    if date_min < transactions[trans_id][0] or first_action == 'NEWTRANS' :
+                        transactions[trans_id][0] = date_min
+                        transactions[trans_id][3] = first_action
+                        transactions[trans_id][4] = first_subcomponent                      
+                
+                if transactions[trans_id][5] != 'SEND':
+                    # Comprobar y actualizar la fecha máxima y sus componentes asociados
+                    if date_max > transactions[trans_id][1] or last_action == 'SEND':
+                        transactions[trans_id][1] = date_max
+                        transactions[trans_id][5] = last_action
+                        transactions[trans_id][6] = last_subcomponent                    
+                        transactions[trans_id][7] +=1  
+                                
+                if date_in_collecctor is not None :
+                    transactions[trans_id][8] = date_in_collecctor
+        else:    
+            add_record_inot(trans_id,date_max, last_action, last_subcomponent, date_in_collecctor,duration,duration_limsp,node_name)
+                         
         count += 1          
         if count % chunk_size == 0:
             # Calcular la duración para cada transacción
@@ -172,30 +214,44 @@ def consolidate_transactions(generator, output_file_path, chunk_size, logger):
             
             if first_chunk:
                 logger.info(f"Escribiendo bloque: {block}.")                
-                df.to_csv(output_file_path, mode='w', index=False, header=True)
+                df.to_csv(output_file_path, mode='w', index=False, header=True,quoting=csv.QUOTE_NONE )
                 first_chunk = False                    
             else:
                 logger.info(f"Escribiendo bloque: {block}.")
-                df.to_csv(output_file_path, mode='a', index=False, header=False)
-            block+=1
+                df.to_csv(output_file_path, mode='a', index=False, header=False,quoting=csv.QUOTE_NONE)
+            block+=1       
+            
+            logger.info(f"Comenzando a calcular las duraciones de transacciones inot ")
+            # Procesar y calcular la duración
+            cant_inot = 0
+            for trans_id, records in trx_inots.items():
+                if records is None:                
+                    continue
+                
+                if trans_id in transactions:
+                    start_time = transactions[trans_id][0]
+                    for i, record in enumerate(records):
+                        cant_inot +=1
+                        date_max = record["date_max"]
+                        duration = (date_max - start_time).total_seconds()
+                        print(f"Transaction ID: {trans_id}, Record {i}, Duration: {duration} seconds")
+                        # Puedes almacenar o procesar la duración calculada según sea necesario
+            logger.info(f"Termina de calcular duraciones de trx inot. Total {cant_inot} inots ")
+
+            write_to_csv(trx_inots, output_result_inot, first_chunk_inot)
+            first_chunk_inot = False  
+            trx_inots.clear()
             transactions.clear()  # Limpiar el diccionario para liberar memoria
-            
-            
+                
     # Escribir cualquier transacción restante
     
     if transactions:
         for trans_id, values in transactions.items():           
             duration = (values[1] - values[0]).total_seconds() 
             duration_limsp = (values[8] - values[0]).total_seconds() if values[8] else 0
-            
-            #print(f"date_in_collecctor  {values['date_in_collecctor']} duration limsp: {duration_limsp}")
-            #print (f"transID: {trans_id} values[8] {values[8]} - values[1] {values[1]}. Duration_limsp:  {duration_limsp}")
-            #transactions[trans_id].append(duration_limsp)            
             transactions[trans_id].append(duration)
             transactions[trans_id].append(duration_limsp)
-            
-
-
+    
         df = pd.DataFrame.from_dict(transactions, orient='index',
                         columns=['date_min', 'date_max', 'priority', 'first_action', 
                                     'first_subcomponent', 'last_action', 'last_subcomponent', 
@@ -212,7 +268,31 @@ def consolidate_transactions(generator, output_file_path, chunk_size, logger):
         if first_chunk:
             df.to_csv(output_file_path, mode='w', index=False, header=True)
         else:
-            df.to_csv(output_file_path, mode='a', index=False, header=False)  
+            df.to_csv(output_file_path, mode='a', index=False, header=False)
+  
+    # Escribir cualquier transaccion inot restante que no haya sido escrito aún
+    if trx_inots:
+        # Procesar y calcular la duración
+        logger.info(f"Comenzando a calcular las duraciones de transacciones inot ")
+        cant_inot = 0
+        for trans_id, records in trx_inots.items():            
+            if records is None:                
+                continue
+            
+            if trans_id in transactions:
+                start_time = transactions[trans_id][0]
+                for i, record in enumerate(records):
+                    cant_inot +=1
+                    date_max = record["date_max"]
+                    date_max_collector = record["date_in_collector"]
+                    duration = (date_max - start_time).total_seconds()                    
+                    duration_limsp = (date_max_collector - start_time).total_seconds()
+                    record["Duration"] = duration
+                    record["duration_limsp"] = duration_limsp
+        logger.info(f"Termina de calcular duraciones de trx inot. Total {cant_inot} inots ")
+        write_to_csv(trx_inots, output_result_inot, first_chunk_inot)        
+        trx_inots.clear()
+              
             
 
 def find_files(directory, pattern):
@@ -242,6 +322,7 @@ def main():
         log_files = find_files(config['InputDirectory'], config['FilePattern'])
         log_interval = int(config['LogInterval'])
         output_result = config['OutputResult']
+        output_result_inot = config ['OutputInots']
         log_directory = config['LogDirectory']
         filelog = config['logName']
         chunk_size = int(config['Chunk_size_write'])
@@ -251,9 +332,10 @@ def main():
         for file_path in log_files:
             try:
                 generator = log_file_generator(file_path, log_interval, logger)
-                consolidate_transactions(generator, output_result, chunk_size, logger)
+                consolidate_transactions(generator, output_result, output_result_inot, chunk_size, logger)
             except Exception as e:
                 logger.error(f"Error procesando el archivo {file_path}: {e}")
+                logger.error(traceback.format_exc())
                 sys.exit(1)
         
         logger.info(f"...Finish")
