@@ -6,6 +6,7 @@ import logging
 import os
 import configparser
 import sys
+import traceback
 from collections import defaultdict
 
 def load_config(config_file):
@@ -47,7 +48,7 @@ def setup_logging(fecha_actual):
     filenameLog = f"{nombre_archivo}_{fecha_actual}{extension_archivo}"
 
     logger_write = logging.getLogger('logger_write')
-    logger_write.setLevel(logging.INFO)
+    logger_write.setLevel(logging.DEBUG)
     # Handler para el segundo archivo de log
     logger_writehandler = logging.FileHandler(filenameLog)
     logger_writehandler.setFormatter(formatter)
@@ -185,8 +186,12 @@ def process_transactions(file_path):
 
 def write_result():
     global archivoResultante
-
+    global chunk_size
+    totalRecords =0    
+    block_chunk =1
     records = []
+
+    logger_write.debug('Inicio de escritura')
     for trans_id, data in global_transactions.items():
         if not data['send_times'] and not data['collector_times']:
             record = {
@@ -233,13 +238,27 @@ def write_result():
                 }
                 records.append(record)
         else:
-            if discarded :
-                logger_discarded.warning(f'Transacción descartada, no tiene la misma cantidad de envíos que salidas del control de flujo: {trans_id}')
+            if discarded:
+                logger_discarded.warning(f'Transaction discarded: {trans_id}')
+        
+        # Write the records to CSV in chunks
+        if len(records) >= chunk_size:
+            logger_write.debug(f'Escribiendo {chunk_size} registros. block {block_chunk}')
+            transactions_df = pd.DataFrame(records)
+            transactions_df.to_csv(archivoResultante, mode='a', header=not os.path.exists(archivoResultante), index=False)
+            logger_write.debug(f'Finalización escritura block {block_chunk}')
+            records.clear()  # Clear the list to free memory
+            block_chunk+=1
+        totalRecords +=1
 
-    transactions_df = pd.DataFrame(records)
+    # Write any remaining records
+    if records:
+        logger_write.debug('Incio escritura DF final chunk')
+        transactions_df = pd.DataFrame(records)
+        transactions_df.to_csv(archivoResultante, mode='a', header=not os.path.exists(archivoResultante), index=False)
+        logger_write.debug('Finalización de proceso DF final chunk')
 
-    transactions_df.to_csv(archivoResultante, mode='w', header=True, index=False)
-    logger_write.info(f"Total Records: {transactions_df.shape[0]} -- FileName: {archivoResultante}")
+    logger_write.info(f"Total registros: {totalRecords} -- FileName: {archivoResultante}")
 
 def process_log_files(directory_path, file_pattern):
     global countFiles
@@ -271,7 +290,7 @@ def process_log_files(directory_path, file_pattern):
         except Exception as e:
             logger_files.error(f'Error processing file {file_name}: {e}')
             #sys.exit(1)
-    
+     
     # Verificar si el archivo existe y eliminarlo si es necesario
     if os.path.exists(archivoResultante):
         os.remove(archivoResultante)
@@ -315,22 +334,20 @@ fecha_actual = datetime.now().strftime("%d%m%Y")
 logger_principal, logger_files, logger_write, logger_discarded = setup_logging(fecha_actual)
 compile_regular_expresion()
 archivoResultante = config['OutputFilePath']
+chunk_size = int(config['Chunk_size_write'])
 countFiles = 0
-
-
-    
+   
 try:
     discarded = config.get('writeDiscarded', 'False')  # Por defecto es una cadena 'False'
     discarded = discarded.lower() in ('true', '1', 'yes', 'on')  # Convierte a booleano
 except KeyError as e:
     discarded = False
 
-
-
 try:
     process_log_files(config['InputPath'], config['FilePattern'] )
 except Exception as e:
     logger_principal.error(f'Error processing log files: {e}')
+    logger_principal.error(traceback.format_exc())
     sys.exit(1)
 
 logger_principal.info('Processing completed…')
