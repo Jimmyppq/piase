@@ -10,6 +10,8 @@ import csv
 
 import pandas as pd
 
+# Inicializar trx_inots como defaultdict
+trx_inots = defaultdict(list)
 
 def setup_logger(output_directory,filelog):
     """Configura el logger para escribir en un archivo en el OutputDirectory."""
@@ -84,6 +86,8 @@ def log_file_generator(file_path, log_interval, logger):
 
 
 def add_record_inot(transaction_id, date_max, last_action, last_subcomponent, date_in_collector, duration, duration_limsp, node_name):
+    if trx_inots[transaction_id] is None:
+        trx_inots[transaction_id] = []
     trx_inots[transaction_id].append({        
         "date_max": date_max,
         "last_action": last_action,
@@ -122,7 +126,6 @@ def consolidate_transactions(generator, output_file_path,output_result_inot, chu
     global trx_inots
     transactions = {}
     trx_mnewtrans = {} #diccionario para gestionar mnewTrans y newtrans cuando una mnewtrans se encuentra primero que su correspondiente trans_id
-    trx_inots = defaultdict(list)
     count = 0
     block = 1
     first_chunk = True
