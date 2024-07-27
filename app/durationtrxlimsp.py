@@ -8,6 +8,7 @@ import configparser
 import sys
 import traceback
 from collections import defaultdict
+import time
 
 def load_config(config_file):
     """Carga la configuración desde un archivo .ini."""
@@ -249,6 +250,7 @@ def write_result():
             logger_write.debug(f'Finalización escritura block {block_chunk}')
             records.clear()  # Clear the list to free memory
             block_chunk+=1
+            #time.sleep(2)
         totalRecords +=1
 
     # Write any remaining records
@@ -260,7 +262,7 @@ def write_result():
 
     logger_write.info(f"Total registros: {totalRecords} -- FileName: {archivoResultante}")
 
-def process_log_files(directory_path, file_pattern):
+def process_log_files(directory_path, file_pattern,chunk_files):
     global countFiles
     global file_name
     global node_name
@@ -268,6 +270,10 @@ def process_log_files(directory_path, file_pattern):
     
     logger_principal.info('Starting processing log Files...')
     directory_path = Path(directory_path)
+    
+    # Verificar si el archivo existe y eliminarlo si es necesario
+    if os.path.exists(archivoResultante):
+        os.remove(archivoResultante)
     
     matching_files = list(directory_path.rglob(file_pattern))
     
@@ -285,17 +291,15 @@ def process_log_files(directory_path, file_pattern):
         try:
             process_transactions(file_path)
             countFiles += 1
-            if countFiles % 20 == 0:
-                logger_principal.info(f'Ha terminado de procesar {countFiles} archivos…')
+            if countFiles % chunk_files == 0:
+                logger_principal.info(f'Ha terminado de procesar {countFiles} archivos y se escribiran en el archivo final')
+                write_result()
+                global_transactions.clear() #vaciar memoria de transacciones acumuladas
         except Exception as e:
             logger_files.error(f'Error processing file {file_name}: {e}')
             #sys.exit(1)
-     
-    # Verificar si el archivo existe y eliminarlo si es necesario
-    if os.path.exists(archivoResultante):
-        os.remove(archivoResultante)
-    
-    # Escribir el archivo CSV con todas las transacciones acumuladas
+        
+    # Escribir el archivo CSV con todas las transacciones restantes
     write_result()
 
 
@@ -335,6 +339,7 @@ logger_principal, logger_files, logger_write, logger_discarded = setup_logging(f
 compile_regular_expresion()
 archivoResultante = config['OutputFilePath']
 chunk_size = int(config['Chunk_size_write'])
+chunk_files = int(config['Chunk_size_write_files'])
 countFiles = 0
    
 try:
@@ -344,7 +349,7 @@ except KeyError as e:
     discarded = False
 
 try:
-    process_log_files(config['InputPath'], config['FilePattern'] )
+    process_log_files(config['InputPath'], config['FilePattern'], chunk_files )
 except Exception as e:
     logger_principal.error(f'Error processing log files: {e}')
     logger_principal.error(traceback.format_exc())
