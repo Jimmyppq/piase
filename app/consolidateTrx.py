@@ -319,6 +319,23 @@ def find_filesGenerator(directory, pattern):
                 filename = os.path.join(root, basename)
                 yield filename
 
+
+def validate_write_access(output_result, logger):
+    """Valida si se puede escribir un archivo en la ruta especificada."""
+    try:
+        # Intenta crear y escribir en el archivo especificado
+        with open(output_result, 'w') as test_file:
+            test_file.write("Validación de acceso de escritura.")
+        
+        # Elimina el contenido escrito para la validación
+        os.remove(output_result)
+    except Exception as e:
+        # Registra el error y sale de la aplicación
+        logger.error(f"Error intentando escribir el archivo en {output_result}: {e}")
+        logger.error(traceback.format_exc())
+        exit(1)
+
+
 def main():
     try:
         config = load_config('./config/config.ini')
@@ -332,6 +349,7 @@ def main():
 
         logger = setup_logger(log_directory,filelog)
         logger.info(f"Start consolidate...")
+        validate_write_access(output_result, logger)
         for file_path in log_files:
             try:
                 generator = log_file_generator(file_path, log_interval, logger)
