@@ -9,7 +9,6 @@ import sys
 import traceback
 from collections import defaultdict
 
-
 def load_config(config_file):
     """Carga la configuración desde un archivo .ini."""
     config = configparser.ConfigParser()
@@ -291,11 +290,8 @@ def process_log_files(directory_path, file_pattern,chunk_files):
         try:
             process_transactions(file_path)
             countFiles += 1
-            if countFiles % chunk_files == 0:
-                logger_principal.info(f'Ha terminado de procesar {countFiles} archivos y se escribiran en el archivo final')
-                write_result()
-                logger_principal.info('Escritura finalizada')
-                global_transactions.clear() #vaciar memoria de transacciones acumuladas
+            if countFiles % 20 == 0:
+                logger_principal.info(f'Ha terminado de procesar {countFiles} archivos…')
         except Exception as e:
             logger_files.error(f'Error processing file {file_name}: {e}')
             #sys.exit(1)
