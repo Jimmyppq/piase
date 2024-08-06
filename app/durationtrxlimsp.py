@@ -334,6 +334,14 @@ def validate_write_access(output_result, logger):
         exit(1)
 
 
+def write_dataconfig (logger,chunk_size,chunk_files,discarded,filePattern):
+    logger.info ("VERSION 5.7")
+    logger.info (f"Chunk_size_write_files: {chunk_files}")
+    logger.info (f"Chunk_size_write: {chunk_size}")
+    logger.info (f"writeDiscarded: {discarded}")
+    logger.info (f"FilePattern: {filePattern}")   
+
+
 #main
 try:
     config = load_config('./config/config.ini')
@@ -353,6 +361,7 @@ compile_regular_expresion()
 archivoResultante = config['OutputFilePath']
 chunk_size = int(config['Chunk_size_write'])
 chunk_files = int(config['Chunk_size_write_files'])
+filePattern = config['FilePattern']
 countFiles = 0
    
 try:
@@ -361,10 +370,12 @@ try:
 except KeyError as e:
     discarded = False
 
+write_dataconfig(logger_principal,chunk_size,chunk_files,discarded,filePattern)
+
 validate_write_access (archivoResultante,logger_principal)
 
 try:
-    process_log_files(config['InputPath'], config['FilePattern'], chunk_files )
+    process_log_files(config['InputPath'], filePattern, chunk_files )
 except Exception as e:
     logger_principal.error(f'Error processing log files: {e}')
     logger_principal.error(traceback.format_exc())

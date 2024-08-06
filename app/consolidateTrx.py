@@ -335,6 +335,13 @@ def validate_write_access(output_result, logger):
         logger.error(traceback.format_exc())
         exit(1)
 
+def write_dataconfig (logger,chunk_size,log_interval,output_result,output_result_inot):
+    logger.info ("VERSION 5.7")
+    logger.info (f"Chunk_size_write: {chunk_size}")
+    logger.info (f"LogInterval: {log_interval}")
+    logger.info (f"OutputResult: {output_result}")
+    logger.info (f"OutputInots: {output_result_inot}")   
+
 
 def main():
     try:
@@ -349,6 +356,7 @@ def main():
 
         logger = setup_logger(log_directory,filelog)
         logger.info(f"Start consolidate...")
+        write_dataconfig(logger,chunk_size,log_interval,output_result,output_result_inot)
         validate_write_access(output_result, logger)
         for file_path in log_files:
             try:
