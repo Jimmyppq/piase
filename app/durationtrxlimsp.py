@@ -290,6 +290,12 @@ def process_log_files(directory_path, file_pattern,chunk_files):
         try:
             process_transactions(file_path)
             countFiles += 1
+            if countFiles % chunk_files == 0:
+                logger_principal.info(f'Ha terminado de procesar {countFiles} archivos y se escribiran en el archivo final')
+                write_result()
+                logger_principal.info('Escritura finalizada')
+                global_transactions.clear() #vaciar memoria de transacciones acumuladas
+
             if countFiles % 20 == 0:
                 logger_principal.info(f'Ha terminado de procesar {countFiles} archivos…')
         except Exception as e:
@@ -322,8 +328,9 @@ def validate_write_access(output_result, logger):
     """Valida si se puede escribir un archivo en la ruta especificada."""
     try:
         # Intenta crear y escribir en el archivo especificado
-        with open(output_result, 'w') as test_file:
+        with open(output_result, 'w') as test_file:            
             test_file.write("Validación de acceso de escritura.")
+            logger.info(f"Validación de escritura exitosa en: {output_result}")
         
         # Elimina el contenido escrito para la validación
         os.remove(output_result)
@@ -335,7 +342,7 @@ def validate_write_access(output_result, logger):
 
 
 def write_dataconfig (logger,chunk_size,chunk_files,discarded,filePattern):
-    logger.info ("VERSION 5.7")
+    logger.info ("VERSION 5.9")
     logger.info (f"Chunk_size_write_files: {chunk_files}")
     logger.info (f"Chunk_size_write: {chunk_size}")
     logger.info (f"writeDiscarded: {discarded}")
