@@ -336,7 +336,7 @@ def validate_write_access(output_result, logger):
         exit(1)
 
 def write_dataconfig (logger,chunk_size,log_interval,output_result,output_result_inot):
-    logger.info ("VERSION 5.7")
+    logger.info ("VERSION 6.1")
     logger.info (f"Chunk_size_write: {chunk_size}")
     logger.info (f"LogInterval: {log_interval}")
     logger.info (f"OutputResult: {output_result}")

@@ -126,6 +126,13 @@ def log_file_generator(file_path):
             if processed_line:
                 yield processed_line
 
+'''
+##########process_transactions##############
+    Procesa las transacciones de un archivo, aquí es dónde está toda la lógica 
+    que unifica cada transacción en una sola línea, todo lo encontrado se va a escribiendo
+    en un diccionario global que se va escribiendo a disco para "limpiar" la memoria cada X archivos
+    determinado por la variable Chunk_size_write_files
+'''
 def process_transactions(file_path):
     global global_transactions
     for detail in log_file_generator(file_path):
@@ -261,6 +268,15 @@ def write_result():
 
     logger_write.info(f"Total registros: {totalRecords} -- FileName: {archivoResultante}")
 
+def orderbydate(directory_path,file_pattern):
+    # Recorrer todos los archivos en el directorio, incluidos subdirectorios
+    files = [file for file in Path(directory_path).rglob(file_pattern) if file.is_file()]
+    
+    # Ordenar los archivos por la fecha de modificación (de más antigua a más reciente)
+    files_sorted = sorted(files, key=lambda file: file.stat().st_mtime)
+    
+    return files_sorted
+
 def process_log_files(directory_path, file_pattern,chunk_files):
     global countFiles
     global file_name
@@ -281,7 +297,12 @@ def process_log_files(directory_path, file_pattern,chunk_files):
         sys.exit(1)
     
     logger_principal.info(f'File search results: {len(matching_files)} files...')
-    for file_path in directory_path.rglob(file_pattern):
+    filesbydate = orderbydate(directory_path,file_pattern)
+    logger_principal.info("File read order:..")
+    for i, file_path in enumerate(filesbydate):
+        logger_principal.info(f"{i+1}: {file_path}")
+
+    for file_path in filesbydate:
         file_path = Path(file_path)
         node_name = file_path.parent.name
         file_name = file_path.name
@@ -291,7 +312,7 @@ def process_log_files(directory_path, file_pattern,chunk_files):
             process_transactions(file_path)
             countFiles += 1
             if countFiles % chunk_files == 0:
-                logger_principal.info(f'Ha terminado de procesar {countFiles} archivos y se escribiran en el archivo final')
+                logger_principal.info(f'Ha terminado de procesar {countFiles} logs y se escribiran en el archivo final')
                 write_result()
                 logger_principal.info('Escritura finalizada')
                 global_transactions.clear() #vaciar memoria de transacciones acumuladas
@@ -341,12 +362,13 @@ def validate_write_access(output_result, logger):
         exit(1)
 
 
-def write_dataconfig (logger,chunk_size,chunk_files,discarded,filePattern):
-    logger.info ("VERSION 5.9")
+def write_dataconfig (logger,chunk_size,chunk_files,discarded,filePattern,inputFile ):
+    logger.info ("VERSION 6.1 (duration)")
     logger.info (f"Chunk_size_write_files: {chunk_files}")
     logger.info (f"Chunk_size_write: {chunk_size}")
     logger.info (f"writeDiscarded: {discarded}")
-    logger.info (f"FilePattern: {filePattern}")   
+    logger.info (f"FilePattern: {filePattern}")
+    logger.info (f"InputFile: {inputFile}")   
 
 
 #main
@@ -369,6 +391,7 @@ archivoResultante = config['OutputFilePath']
 chunk_size = int(config['Chunk_size_write'])
 chunk_files = int(config['Chunk_size_write_files'])
 filePattern = config['FilePattern']
+inputFile = config['InputPath']
 countFiles = 0
    
 try:
@@ -377,12 +400,11 @@ try:
 except KeyError as e:
     discarded = False
 
-write_dataconfig(logger_principal,chunk_size,chunk_files,discarded,filePattern)
-
+write_dataconfig(logger_principal,chunk_size,chunk_files,discarded,filePattern,inputFile)
 validate_write_access (archivoResultante,logger_principal)
 
 try:
-    process_log_files(config['InputPath'], filePattern, chunk_files )
+    process_log_files(inputFile, filePattern, chunk_files )
 except Exception as e:
     logger_principal.error(f'Error processing log files: {e}')
     logger_principal.error(traceback.format_exc())
