@@ -283,7 +283,7 @@ def process_log_files(directory_path, file_pattern,chunk_files):
     global node_name
     global archivoResultante
     
-    logger_principal.info('Starting processing log Files...')
+    
     directory_path = Path(directory_path)
     
     # Verificar si el archivo existe y eliminarlo si es necesario
@@ -301,6 +301,8 @@ def process_log_files(directory_path, file_pattern,chunk_files):
     logger_principal.info("File read order:..")
     for i, file_path in enumerate(filesbydate):
         logger_principal.info(f"{i+1}: {file_path}")
+    logger_principal.info("...File read order complete:")
+    logger_principal.info('Starting processing log Files...')
 
     for file_path in filesbydate:
         file_path = Path(file_path)
