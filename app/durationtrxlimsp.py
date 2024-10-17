@@ -79,6 +79,7 @@ def process_log_line(line):
     """
     Esta función procesa una línea de log y extrae los detalles relevantes.
     """
+    global valid_actions,valid_subcomponents
     transaction_pattern = r"(transaction:)([^ ]*)"
     priority_pattern = r"pri:(\d+)"
 
@@ -86,6 +87,11 @@ def process_log_line(line):
 
     if match:
         details = match.groupdict()
+        action = details['action']
+        subcomponent = details['subcomponent']
+        # Filtrar si el action no está en valid_actions y el subcomponent no está en valid_subcomponents
+        if action not in valid_actions and subcomponent not in valid_subcomponents:
+            return None
 
         transaction_matches = re.finditer(transaction_pattern, details['details'])
         transaction_ids = []
@@ -165,8 +171,7 @@ def process_transactions(file_path):
             transaction['date_min'] = timestamp
             transaction['first_action'] = action
             transaction['first_subcomponent'] = subcomponent
-
-        if action == 'SEND' or update_max:
+        elif action == 'SEND' or update_max:
             transaction['date_max'] = timestamp
             transaction['last_action'] = action
             transaction['last_subcomponent'] = subcomponent
@@ -176,14 +181,16 @@ def process_transactions(file_path):
         if action == 'SEND':
             transaction['send_times'].append(timestamp)
 
+        if action == 'OUT' and subcomponent == 'FailOverManager':
+            transaction['collector_times'].append(timestamp)
+
         if priority != -1:
             transaction['priority'] = priority
 
         if mtransaction_id is not None:
             transaction['mnewtrans'] = mtransaction_id
 
-        if action == 'OUT' and subcomponent == 'FailOverManager':
-            transaction['collector_times'].append(timestamp)
+        
 
     cantidad_registros = len(global_transactions)
     if cantidad_registros > 0:
@@ -191,16 +198,19 @@ def process_transactions(file_path):
     else:
         logger_files.warning('No transactions in this file')
 
-def write_result():
+def write_result(last_block):
     global archivoResultante
     global chunk_size
     totalRecords =0    
     block_chunk =1
     records = []
+    cant_complete = 0
+    completed_transactions = []
 
     logger_write.debug('Inicio de escritura')
     for trans_id, data in global_transactions.items():
-        if not data['send_times'] and not data['collector_times']:
+        '''
+        if data['send_times'] and data['collector_times']:
             record = {
                 'Transaction ID': trans_id,
                 'date_min': data['date_min'],
@@ -219,11 +229,12 @@ def write_result():
                 'inot': False
             }
             records.append(record)
+        '''
         
         send_times = data['send_times']
         collector_times = data['collector_times']
         
-        if len(send_times) == len(collector_times):
+        if len(send_times) == len(collector_times) and len(send_times) > 0:
             for i, (send_time, collector_time) in enumerate(zip(send_times, collector_times)):
                 inot_value = i > 0  # Marcar como True a partir del segundo SEND
                 record = {
@@ -244,12 +255,45 @@ def write_result():
                     'inot': inot_value
                 }
                 records.append(record)
-        else:
+                cant_complete +=1
+            completed_transactions.append(trans_id)
+        
+        elif last_block:
+            action = data['first_action']
+            if action == 'NEWTRANS' :
+                record = {
+                'Transaction ID': trans_id,
+                'date_min': data['date_min'],
+                'date_max': data['date_max'],
+                'priority': data['priority'],
+                'first_action': data['first_action'],
+                'last_action': data['last_action'],
+                'first_subcomponent': data['first_subcomponent'],
+                'last_subcomponent': data['last_subcomponent'],
+                'Duration': (data['date_max'] - data['date_min']).total_seconds(),
+                'mnewtrans': data['mnewtrans'],
+                'countSend': data['countSend'],
+                'date_in_collector': data.get('date_in_collector'),
+                'duration_limsp': None,
+                'node_name': data['node_name'],
+                'inot': False
+            }
+                records.append(record)
+                completed_transactions.append(trans_id)
+                cant_complete +=1
+        '''    
+            Aquí se están descartando las transacciones cuando no tienen SEND, lo cual cuando se procesan
+            transacciones por bloques no es del todo acertado ya que el SEND de la misma transacción puede 
+            estar en un bloque mas adelante.
+            Esta parte se podría enviar a una tabla en sql lite para mantener las transacciones incompletas, o 
+            bien dejarlas en el diccionario original
+            
             if discarded:
                 logger_discarded.warning(f'Transaction discarded: {trans_id}')
-        
+        '''
+
         # Write the records to CSV in chunks
-        if len(records) >= chunk_size:
+        if cant_complete >= chunk_size:
             logger_write.debug(f'Escribiendo {chunk_size} registros. block {block_chunk}')
             transactions_df = pd.DataFrame(records)
             transactions_df.to_csv(archivoResultante, mode='a', header=not os.path.exists(archivoResultante), index=False)
@@ -257,16 +301,21 @@ def write_result():
             records.clear()  # Clear the list to free memory
             block_chunk+=1
             #time.sleep(2)
-        totalRecords +=1
+            totalRecords +=1
+    
+    for trans_id in completed_transactions:
+        del global_transactions[trans_id]
 
     # Write any remaining records
     if records:
-        logger_write.debug('Incio escritura DF final chunk')
+        logger_write.debug(f'Escribiendo ultimo bloque {len(records)} ')
         transactions_df = pd.DataFrame(records)
         transactions_df.to_csv(archivoResultante, mode='a', header=not os.path.exists(archivoResultante), index=False)
         logger_write.debug('Finalización de proceso DF final chunk')
 
     logger_write.info(f"Total registros: {totalRecords} -- FileName: {archivoResultante}")
+    logger_write.info(f"Transacciones completadas: {cant_complete}")
+    logger_write.info(f"Transacciones que quedan en memoria {len (global_transactions)} ")
 
 def orderbydate(directory_path,file_pattern):
     # Recorrer todos los archivos en el directorio, incluidos subdirectorios
@@ -293,7 +342,7 @@ def process_log_files(directory_path, file_pattern,chunk_files):
     matching_files = list(directory_path.rglob(file_pattern))
     
     if not matching_files:
-        logging.error(f'No files found. Terminating the script.{directory_path} archivos {file_pattern}')
+        logging.error(f'No files found. Terminating the script. {directory_path} archivos {file_pattern}')
         sys.exit(1)
     
     logger_principal.info(f'File search results: {len(matching_files)} files...')
@@ -315,9 +364,9 @@ def process_log_files(directory_path, file_pattern,chunk_files):
             countFiles += 1
             if countFiles % chunk_files == 0:
                 logger_principal.info(f'Ha terminado de procesar {countFiles} logs y se escribiran en el archivo final')
-                write_result()
+                write_result(False)
                 logger_principal.info('Escritura finalizada')
-                global_transactions.clear() #vaciar memoria de transacciones acumuladas
+                #global_transactions.clear() #vaciar memoria de transacciones acumuladas
 
             if countFiles % 20 == 0:
                 logger_principal.info(f'Ha terminado de procesar {countFiles} archivos…')
@@ -326,7 +375,10 @@ def process_log_files(directory_path, file_pattern,chunk_files):
             #sys.exit(1)
         
     # Escribir el archivo CSV con todas las transacciones restantes
-    write_result()
+    write_result(True)
+    trx_incomplete = len(global_transactions)
+    if trx_incomplete > 0 :
+        logger_principal.info(f'Se han descartado {trx_incomplete} transacciones')
 
 
 global_transactions = defaultdict(lambda: {
@@ -365,7 +417,7 @@ def validate_write_access(output_result, logger):
 
 
 def write_dataconfig (logger,chunk_size,chunk_files,discarded,filePattern,inputFile ):
-    logger.info ("VERSION 6.1 (duration)")
+    logger.info ("VERSION 6.3 (duration)")
     logger.info (f"Chunk_size_write_files: {chunk_files}")
     logger.info (f"Chunk_size_write: {chunk_size}")
     logger.info (f"writeDiscarded: {discarded}")
@@ -404,6 +456,9 @@ except KeyError as e:
 
 write_dataconfig(logger_principal,chunk_size,chunk_files,discarded,filePattern,inputFile)
 validate_write_access (archivoResultante,logger_principal)
+# Convertir los valores a sets para hacer las búsquedas más rápidas
+valid_actions = set(config['valid_actions'].split(','))
+valid_subcomponents = set(config['valid_subcomponents'].split(','))
 
 try:
     process_log_files(inputFile, filePattern, chunk_files )
