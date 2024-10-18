@@ -198,7 +198,7 @@ def process_transactions(file_path):
     else:
         logger_files.warning('No transactions in this file')
 
-def write_result(last_block):
+def write_result(last_block,mem_trx_security):
     global archivoResultante
     global chunk_size
     totalRecords =0    
@@ -292,6 +292,8 @@ def write_result(last_block):
                 logger_discarded.warning(f'Transaction discarded: {trans_id}')
         '''
 
+        
+
         # Write the records to CSV in chunks
         if cant_complete >= chunk_size:
             logger_write.debug(f'Escribiendo {chunk_size} registros. block {block_chunk}')
@@ -308,15 +310,75 @@ def write_result(last_block):
 
     logger_principal.info(f'Se ha liberado memoria de {cant_complete} transacciones')
 
-    # Write any remaining records
+    cant_trx_incomplete = len(global_transactions)
+    #cuando se supere el limite de seguridad de transacciones en memoria
+    #es necesario guardarlas en disco para evitar el colapso del servidor
+    cant_trx_incomplete_tosave = 0
+    if cant_trx_incomplete > mem_trx_security :
+        logger_principal.info(f'Se ha alcanzado el limite superior de transacciones incompletas en memoria. Inicia proceso de guardar a disco y liberar memoria')
+        logger_principal.info('Identificando transacciones a guardar')
+        for trans_id, data in global_transactions.items():
+            action = data['first_action']        
+            if data['send_times'] and data['collector_times']:
+                record = {
+                    'Transaction ID': trans_id,
+                    'date_min': data['date_min'],
+                    'date_max': data['date_max'],
+                    'priority': data['priority'],
+                    'first_action': data['first_action'],
+                    'last_action': data['last_action'],
+                    'first_subcomponent': data['first_subcomponent'],
+                    'last_subcomponent': data['last_subcomponent'],
+                    'Duration': (data['date_max'] - data['date_min']).total_seconds(),
+                    'mnewtrans': data['mnewtrans'],
+                    'countSend': data['countSend'],
+                    'date_in_collector': data.get('date_in_collector'),
+                    'duration_limsp': None,
+                    'node_name': data['node_name'],
+                    'inot': False
+                }
+                records.append(record)
+                cant_trx_incomplete_tosave +=1
+            elif action == 'NEWTRANS' or data['mnewtrans'] :
+                record = {
+                    'Transaction ID': trans_id,
+                    'date_min': data['date_min'],
+                    'date_max': data['date_max'],
+                    'priority': data['priority'],
+                    'first_action': data['first_action'],
+                    'last_action': data['last_action'],
+                    'first_subcomponent': data['first_subcomponent'],
+                    'last_subcomponent': data['last_subcomponent'],
+                    'Duration': (data['date_max'] - data['date_min']).total_seconds(),
+                    'mnewtrans': data['mnewtrans'],
+                    'countSend': data['countSend'],
+                    'date_in_collector': data.get('date_in_collector'),
+                    'duration_limsp': None,
+                    'node_name': data['node_name'],
+                    'inot': False
+                }
+                records.append(record)
+                cant_trx_incomplete_tosave +=1                
+            elif discarded :                
+                logger_discarded.warning(f'transaction: {trans_id} {data}')
+
+        logger_principal.info(f'Se han identificado {cant_trx_incomplete_tosave} transacciones por guardar')
+        logger_principal.info(f'Se descartaran definitivamente {cant_trx_incomplete-cant_trx_incomplete_tosave}')     
+        global_transactions.clear()
+
+    # Write any remaining records 
     if records:
         logger_write.debug(f'Escribiendo ultimo bloque {len(records)} ')
         transactions_df = pd.DataFrame(records)
         transactions_df.to_csv(archivoResultante, mode='a', header=not os.path.exists(archivoResultante), index=False)
         logger_write.debug('Finalización de proceso DF final chunk')
 
-    logger_write.info(f"Total registros: {totalRecords} -- FileName: {archivoResultante}")
-    logger_write.info(f"Transacciones que quedan en memoria {len (global_transactions)} ")
+    #logger_write.info(f"Total registros: {totalRecords} -- FileName: {archivoResultante}")    
+    logger_write.info(f"Transacciones que quedan en memoria {cant_trx_incomplete} ")
+
+
+
+
 
 def orderbydate(directory_path,file_pattern):
     # Recorrer todos los archivos en el directorio, incluidos subdirectorios
@@ -327,7 +389,7 @@ def orderbydate(directory_path,file_pattern):
     
     return files_sorted
 
-def process_log_files(directory_path, file_pattern,chunk_files):
+def process_log_files(directory_path, file_pattern,chunk_files,mem_trx_security):
     global countFiles
     global file_name
     global node_name
@@ -365,7 +427,7 @@ def process_log_files(directory_path, file_pattern,chunk_files):
             countFiles += 1
             if countFiles % chunk_files == 0:
                 logger_principal.info(f'Ha terminado de procesar {countFiles} logs y se escribiran en el archivo final')
-                write_result(False)
+                write_result(False,mem_trx_security)
                 logger_principal.info('Escritura finalizada')
                 #global_transactions.clear() #vaciar memoria de transacciones acumuladas
 
@@ -376,7 +438,7 @@ def process_log_files(directory_path, file_pattern,chunk_files):
             #sys.exit(1)
         
     # Escribir el archivo CSV con todas las transacciones restantes
-    write_result(True)
+    write_result(True,mem_trx_security)
     trx_incomplete = len(global_transactions)
     if trx_incomplete > 0 :
         logger_principal.info(f'Se han descartado {trx_incomplete} transacciones')
@@ -421,13 +483,14 @@ def validate_write_access(output_result, logger):
         exit(1)
 
 
-def write_dataconfig (logger,chunk_size,chunk_files,discarded,filePattern,inputFile ):
-    logger.info ("VERSION 6.4 (duration)")
+def write_dataconfig (logger,chunk_size,chunk_files,discarded,filePattern,inputFile,mem_trx_security ):
+    logger.info ("VERSION 6.5 (duration)")
     logger.info (f"Chunk_size_write_files: {chunk_files}")
     logger.info (f"Chunk_size_write: {chunk_size}")
     logger.info (f"writeDiscarded: {discarded}")
     logger.info (f"FilePattern: {filePattern}")
-    logger.info (f"InputFile: {inputFile}")   
+    logger.info (f"InputFile: {inputFile}")
+    logger.info (f"mem_trx_security: {mem_trx_security}")   
 
 
 #main
@@ -451,6 +514,11 @@ chunk_size = int(config['Chunk_size_write'])
 chunk_files = int(config['Chunk_size_write_files'])
 filePattern = config['FilePattern']
 inputFile = config['InputPath']
+try:
+    mem_trx_security = int(config['mem_trx_security'])
+except KeyError as e:
+    mem_trx_security = 10000000
+
 countFiles = 0
    
 try:
@@ -459,14 +527,14 @@ try:
 except KeyError as e:
     discarded = False
 
-write_dataconfig(logger_principal,chunk_size,chunk_files,discarded,filePattern,inputFile)
+write_dataconfig(logger_principal,chunk_size,chunk_files,discarded,filePattern,inputFile, mem_trx_security)
 validate_write_access (archivoResultante,logger_principal)
 # Convertir los valores a sets para hacer las búsquedas más rápidas
 valid_actions = set(config['valid_actions'].split(','))
 valid_subcomponents = set(config['valid_subcomponents'].split(','))
 
 try:
-    process_log_files(inputFile, filePattern, chunk_files )
+    process_log_files(inputFile, filePattern, chunk_files,mem_trx_security )
 except Exception as e:
     logger_principal.error(f'Error processing log files: {e}')
     logger_principal.error(traceback.format_exc())
