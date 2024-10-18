@@ -2,3 +2,11 @@
 *.csv
 .DS_Store
 shellQA/
+*.db
+app/testRendimiento.py
+app/qosprocesslite.py
+app/qosmetrics.py
+app/qosmetrics_process.py
+configServer/config.ini
+configServer/config.ini
+configServer/config.ini

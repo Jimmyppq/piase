@@ -299,12 +299,14 @@ def write_result(last_block):
             transactions_df.to_csv(archivoResultante, mode='a', header=not os.path.exists(archivoResultante), index=False)
             logger_write.debug(f'Finalización escritura block {block_chunk}')
             records.clear()  # Clear the list to free memory
-            block_chunk+=1
-            #time.sleep(2)
+            block_chunk+=1            
             totalRecords +=1
     
+    logger_principal.info('Vaciando memoria de transacciones completadas')
     for trans_id in completed_transactions:
         del global_transactions[trans_id]
+
+    logger_principal.info(f'Se ha liberado memoria de {cant_complete} transacciones')
 
     # Write any remaining records
     if records:
@@ -314,7 +316,6 @@ def write_result(last_block):
         logger_write.debug('Finalización de proceso DF final chunk')
 
     logger_write.info(f"Total registros: {totalRecords} -- FileName: {archivoResultante}")
-    logger_write.info(f"Transacciones completadas: {cant_complete}")
     logger_write.info(f"Transacciones que quedan en memoria {len (global_transactions)} ")
 
 def orderbydate(directory_path,file_pattern):
@@ -379,6 +380,10 @@ def process_log_files(directory_path, file_pattern,chunk_files):
     trx_incomplete = len(global_transactions)
     if trx_incomplete > 0 :
         logger_principal.info(f'Se han descartado {trx_incomplete} transacciones')
+        if discarded:
+            for trans_discard_id in global_transactions.items():
+                logger_discarded.warning(f'Transaction discarded: {trans_discard_id}')
+            
 
 
 global_transactions = defaultdict(lambda: {
@@ -417,7 +422,7 @@ def validate_write_access(output_result, logger):
 
 
 def write_dataconfig (logger,chunk_size,chunk_files,discarded,filePattern,inputFile ):
-    logger.info ("VERSION 6.3 (duration)")
+    logger.info ("VERSION 6.4 (duration)")
     logger.info (f"Chunk_size_write_files: {chunk_files}")
     logger.info (f"Chunk_size_write: {chunk_size}")
     logger.info (f"writeDiscarded: {discarded}")
