@@ -18,14 +18,19 @@ class ReviewIncomplete:
             raise KeyError("'LOGGING' section not found in the configuration file.")
         
         self.results = [] # Lista para almacenar los resultados finales
-        self.setup_logging()   
-        self.start_time = time.time()
-        self.load_configuration_values()
-        self.write_dataconfig()
+        self.result_incomplete = [] # Lista para almacenar las nuevas transacciones incomppletas
+           
+        self.start_time = time.time()        
         self.count_trx_complete = 0
+        self.count_trx_incomplete = 0
         self.count_trx_read = 0
         self.keep_running = True # establece cuando detener el hilo que escribe los logs
         self.transaction_dict = defaultdict(list)
+        self.mem_trx_security = 0
+
+        self.setup_logging()
+        self.load_configuration_values()
+        self.write_dataconfig()
 
     def load_config(self, config_file):
         config = configparser.ConfigParser()
@@ -51,7 +56,9 @@ class ReviewIncomplete:
         
         self.incomplete_transactions_file = self.config['PROCESS_FILES']['IncompleteTransactionsFile']
         self.CompletedTransactionsFile = self.config['PROCESS_FILES']['CompletedTransactionsFile']
+        self.incomplete_transactions_review_file = self.config['PROCESS_FILES']['IncompleteReviewTransactionsFile'] #Las nuevas incompletas que generará esta clase
         self.timeToLog = self.config['PROCESS_FILES'].getint('timeToLog', fallback=60)
+        self.mem_trx_security = self.config['PROCESS_FILES'].getint('mem_trx_security', 5000000)
 
     def process_incomplete(self) :
         try:
@@ -79,8 +86,11 @@ class ReviewIncomplete:
                                 'NodeName': transaction['NodeName'],
                                 'Filename': transaction['Filename']
                             })
-                        self.process_transaction_block()                        
-                        self.write_result_to_binary()
+                        self.process_transaction_block()
+                        if self.results :                        
+                            self.write_result_to_binary()
+                        if self.result_incomplete :
+                            self.write_result_incomplete_to_binary()
                         
 
                     except EOFError:
@@ -93,8 +103,9 @@ class ReviewIncomplete:
 
     def process_transaction_block(self):
         self.count_trx_read +=  len(self.transaction_dict)
-        for transaction_id, records in self.transaction_dict.items():
-            
+        trx_out = trx_in = False
+        count_trx_process = 0 
+        for transaction_id, records in self.transaction_dict.items():            
             result = {
                 'Transaction ID': transaction_id,
                 'Date Min': records[0]['Date Min'],
@@ -124,25 +135,38 @@ class ReviewIncomplete:
                     result['first_action']=first_action
                     result['Date Min']=date_min
                     result['first_subcomponent']=first_subcomponent
+                    trx_in = True
                     continue
                 if last_action == 'SEND':
                     result['Last Action']='SEND'
                     result['date_max'] = date_max
                     result['Last Subcomponent'] = last_subcomponent
+                    trx_out = True
                     continue
                 if  first_action == 'SEND':
                     result['Last Action']='SEND'
                     result['date_max'] = date_min
                     result['Last Subcomponent'] = first_subcomponent
+                    trx_out = True
                     continue
                 if first_subcomponent == 'FailOverManager':
                     result['date_in_collector']=date_in_collector
                     continue
- 
-            result['Duration'] = (result['date_max'] - result['Date Min']).total_seconds()
-            result['duration_limsp'] = (result['date_in_collector'] - result['Date Min']).total_seconds() if result['date_in_collector'] else None
-            
-            self.results.append(result)
+          
+            if trx_in and trx_out : 
+                result['Duration'] = (result['date_max'] - result['Date Min']).total_seconds()
+                result['duration_limsp'] = (result['date_in_collector'] - result['Date Min']).total_seconds() if result['date_in_collector'] else None
+                self.results.append(result)
+            else:
+                self.result_incomplete.append(result)
+
+            trx_out = trx_in = False
+            count_trx_process +=1
+
+            if count_trx_process > self.mem_trx_security :
+                self.write_result_to_binary()
+                self.write_result_incomplete_to_binary()
+
         self.transaction_dict.clear()
       
        
@@ -158,22 +182,38 @@ class ReviewIncomplete:
         except Exception as e:
             self.logger.error(f"Error al escribir transacciones completadas al archivo: {e}")
 
+    def write_result_incomplete_to_binary(self):
+        try:
+            with open(self.incomplete_transactions_review_file, 'ab') as bin_file:  # 'ab' para agregar datos en formato binario
+                pickle.dump(self.result_incomplete, bin_file)
+            self.logger.debug(f"{len(self.result_incomplete)} Transacciones incompletadas {self.incomplete_transactions_review_file}")
+            self.count_trx_incomplete += len(self.result_incomplete)
+            self.result_incomplete.clear()
+        except Exception as e:
+            self.logger.error(f"Error al escribir transacciones completadas al archivo: {e}")
+
+
     def log_progress(self):
         while self.keep_running:
             parcial_time = time.time()
-            total_time = parcial_time - self.start_time            
-            self.logger.info(f"Total de transacciones marcadas como completadas {self.count_trx_complete}, y transacciones leídas {self.count_trx_read}")                               
+            total_time = parcial_time - self.start_time   
+            self.logger.info(f'(tmp)Transacciones completas {process.count_trx_complete}')
+            self.logger.info(f'(tmp)Transacciones icompletas {process.count_trx_incomplete}')
+            self.logger.info(f'(tmp)Transacciones leídas {process.count_trx_read}')           
+            #self.logger.info(f"Total de transacciones marcadas como completadas {self.count_trx_complete}, y transacciones leídas {self.count_trx_read}")                               
             if total_time > 3600 :
-                logging.info(f"Tiempo transcurrido: {total_time / 3600:.2f} horas.")
+                logging.info(f"(tmp)Tiempo transcurrido: {total_time / 3600:.2f} horas.")
             else:
-                logging.info(f"Tiempo transcurrido: {total_time / 60:.2f} minutos.")
+                logging.info(f"(tmp)Tiempo transcurrido: {total_time / 60:.2f} minutos.")
             time.sleep(self.timeToLog)  # Esperar x segundos
 
     def write_dataconfig(self):
-        self.logger.info("VERSION 1.1")
+        self.logger.info("VERSION 1.2")
         self.logger.info(f"IncompleteTransactionsFile: {self.incomplete_transactions_file}")
         self.logger.info(f"CompleteTransactionsFile: {self.CompletedTransactionsFile}")
+        self.logger.info(f"IncompleteReviewTransactionsFile: {self.incomplete_transactions_review_file}")        
         self.logger.info(f"timeToLog: {self.timeToLog}")
+        self.logger.info(f"mem_trx_security: {self.mem_trx_security}")
 
     
 if __name__ == "__main__":
@@ -187,7 +227,9 @@ if __name__ == "__main__":
     finally:
         end_time = time.time()
         total_time = end_time - process.start_time
-        logging.info(f"Se escriben {process.count_trx_complete} transacciones completas de un total de {process.count_trx_read} leidas")
+        logging.info(f'Transacciones completas {process.count_trx_complete}')
+        logging.info(f'Transacciones icompletas {process.count_trx_incomplete}')
+        logging.info(f'Transacciones leídas {process.count_trx_read}')       
 
         if total_time > 60 :
             logging.info(f"Tiempo total: {total_time / 60:.2f} minutos.")

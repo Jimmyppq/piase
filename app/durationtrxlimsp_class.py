@@ -469,7 +469,7 @@ if __name__ == "__main__":
         total_time = end_time - manager.start_time
         logging.info(f"Se escriben {manager.count_trx_complete} transacciones completas")
         logging.info(f"Se descartan {manager.count_incomplete_write} transacciones")
-        if total_time > 60 :
-            logging.info(f"Tiempo total: {total_time / 60:.2f} minutos.")
+        if total_time > 3600 :
+            logging.info(f"Tiempo total: {total_time / 3600:.2f} horas.")
         else:
-            logging.info(f"Tiempo total: {total_time:.2f} segundos.")
+            logging.info(f"Tiempo total: {total_time / 60 :.2f} minutos.")

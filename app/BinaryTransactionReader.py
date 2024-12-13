@@ -36,7 +36,7 @@ class BinaryTransactionReader:
             self.logger.error("'PROCESS_FILES' section not found in the configuration file.")
             raise KeyError("'PROCESS_FILES' section not found in the configuration file.")
         
-        self.incomplete_transactions_file = self.config['PROCESS_FILES']['IncompleteTransactionsFile']
+        self.incomplete_transactions_file = self.config['PROCESS_FILES']['IncompleteReviewTransactionsFile']
         self.completed_transactions_file = self.config['PROCESS_FILES']['CompletedTransactionsFile']
         self.reviewTransactionsFile = self.config['PROCESS_FILES']['ReviewTransactionsFile']
         self.resultFinalFile = self.config['PROCESS_FILES']['ResultFinalFile']
