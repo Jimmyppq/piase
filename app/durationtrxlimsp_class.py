@@ -203,12 +203,14 @@ class ProcessorFiles:
             parcial_time = time.time()
             total_time = parcial_time - self.start_time
             progressFiles = (self.countFiles/self.totalFiles)*100
-            self.logger.info(f"Total de archivos procesados {self.countFiles}, progreso {progressFiles:.2f}%. Tiempo transcurrido {total_time:.2f}")                               
-            time.sleep(self.timeToLog)  # Esperar x segundos
+            self.logger.info(f"Total de archivos procesados {self.countFiles}, progreso {progressFiles:.2f}%")
+            if total_time > 3600 :
+                logging.info(f"Tiempo transcurrido: {total_time / 3600:.2f} horas.")
+            else:
+                logging.info(f"Tiempo transcurrido: {total_time / 60:.2f} minutos.")
+            time.sleep(self.timeToLog)  # Esperar x segundos                               
+
         
-
-
-
     def process_transactions(self, file_path,node_name,file_name):
         
         for detail in self.log_file_generator(file_path):

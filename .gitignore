@@ -17,3 +17,6 @@ configServer/config.ini
 app_server/
 qos*
 test*
+app/log-processor.py
+app/ReadFiles.py
+transacciones_descartadas.txt
