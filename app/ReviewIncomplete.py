@@ -1,0 +1,196 @@
+import csv
+import os
+import pickle
+import logging
+import configparser
+import time
+import sys
+import threading
+from datetime import datetime
+from collections import defaultdict
+
+
+
+class ReviewIncomplete:
+    def __init__(self, config_file):
+        self.config = self.load_config(config_file)
+        if 'LOGGING' not in self.config:
+            raise KeyError("'LOGGING' section not found in the configuration file.")
+        
+        self.results = [] # Lista para almacenar los resultados finales
+        self.setup_logging()   
+        self.start_time = time.time()
+        self.load_configuration_values()
+        self.write_dataconfig()
+        self.count_trx_complete = 0
+        self.count_trx_read = 0
+        self.keep_running = True # establece cuando detener el hilo que escribe los logs
+        self.transaction_dict = defaultdict(list)
+
+    def load_config(self, config_file):
+        config = configparser.ConfigParser()
+        config.read(config_file)
+        return config
+    
+    def setup_logging(self):
+        log_level_str = self.config['LOGGING'].get('LogLevel', 'INFO').upper()
+        log_level = getattr(logging, log_level_str, logging.INFO)
+
+        # Logger principal con fecha en el nombre del archivo
+        log_file_path = self.config['LOGGING']['LogFilePathIncomplete']
+        log_file_path_with_date = f"{os.path.splitext(log_file_path)[0]}_{datetime.now().strftime('%Y-%m-%d')}{os.path.splitext(log_file_path)[1]}"
+        logging.basicConfig(filename=log_file_path_with_date,
+                            level=log_level,
+                            format='%(asctime)s - %(levelname)s - %(message)s')
+        self.logger = logging.getLogger()     
+
+    def load_configuration_values(self):
+        if 'PROCESS_FILES' not in self.config:
+            self.logger.error("'PROCESS_FILES' section not found in the configuration file.")
+            raise KeyError("'PROCESS_FILES' section not found in the configuration file.")
+        
+        self.incomplete_transactions_file = self.config['PROCESS_FILES']['IncompleteTransactionsFile']
+        self.CompletedTransactionsFile = self.config['PROCESS_FILES']['CompletedTransactionsFile']
+        self.timeToLog = self.config['PROCESS_FILES'].getint('timeToLog', fallback=60)
+
+    def process_incomplete(self) :
+        try:
+            
+            progress_thread = threading.Thread(target=self.log_progress, daemon=True)
+            progress_thread.start()
+            with open(self.incomplete_transactions_file, 'rb') as file:
+                while True:
+                    try:
+                        transactions = pickle.load(file)
+                        for transaction in transactions:
+                            transaction_id = transaction['Transaction ID']
+                            self.transaction_dict[transaction_id].append({
+                                'Date Min': transaction['Date Min'],
+                                'date_max': transaction['date_max'],
+                                'Priority': transaction['Priority'],
+                                'first_action': transaction['first_action'],
+                                'first_subcomponent': transaction['first_subcomponent'],
+                                'Last Action': transaction['Last Action'],
+                                'Last Subcomponent': transaction['Last Subcomponent'],
+                                'countSend': transaction['countSend'],
+                                'date_in_collector': transaction['date_in_collector'],
+                                'Duration': transaction['Duration'],
+                                'duration_limsp': transaction['duration_limsp'],
+                                'NodeName': transaction['NodeName'],
+                                'Filename': transaction['Filename']
+                            })
+                        self.process_transaction_block()                        
+                        self.write_result_to_binary()
+                        
+
+                    except EOFError:
+                        break
+            self.keep_running = False
+            progress_thread.join()
+        except Exception as e:
+            self.logger.error(f"Error al leer las transacciones incompletas del archivo binario: {e}")
+            sys.exit(1)
+
+    def process_transaction_block(self):
+        self.count_trx_read +=  len(self.transaction_dict)
+        for transaction_id, records in self.transaction_dict.items():
+            
+            result = {
+                'Transaction ID': transaction_id,
+                'Date Min': records[0]['Date Min'],
+                'date_max': records[0]['date_max'],
+                'Priority': records[0]['Priority'],
+                'first_action': records[0]['first_action'],
+                'first_subcomponent': records[0]['first_subcomponent'], 
+                'Last Action': records[0]['Last Action'],
+                'Last Subcomponent': records[0]['Last Subcomponent'],
+                'countSend': records[0]['countSend'],
+                'date_in_collector': records[0]['date_in_collector'],
+                'Duration': records[0]['Duration'],
+                'duration_limsp': records[0]['duration_limsp'],
+                'NodeName': records[0]['NodeName'],                
+                'Filename': records[0]['Filename']
+                }
+            for record in records:        
+                first_action = record['first_action']
+                date_min = record['Date Min']
+                first_subcomponent = record['first_subcomponent']
+                last_action = record ['Last Action']
+                date_max = record ['date_max']
+                last_subcomponent = record['Last Subcomponent']
+                date_in_collector = record['date_in_collector']
+
+                if first_action == 'NEWTRANS' or first_action == 'MNEWTRANS':
+                    result['first_action']=first_action
+                    result['Date Min']=date_min
+                    result['first_subcomponent']=first_subcomponent
+                    continue
+                if last_action == 'SEND':
+                    result['Last Action']='SEND'
+                    result['date_max'] = date_max
+                    result['Last Subcomponent'] = last_subcomponent
+                    continue
+                if  first_action == 'SEND':
+                    result['Last Action']='SEND'
+                    result['date_max'] = date_min
+                    result['Last Subcomponent'] = first_subcomponent
+                    continue
+                if first_subcomponent == 'FailOverManager':
+                    result['date_in_collector']=date_in_collector
+                    continue
+ 
+            result['Duration'] = (result['date_max'] - result['Date Min']).total_seconds()
+            result['duration_limsp'] = (result['date_in_collector'] - result['Date Min']).total_seconds() if result['date_in_collector'] else None
+            
+            self.results.append(result)
+        self.transaction_dict.clear()
+      
+       
+
+
+    def write_result_to_binary(self):
+        try:
+            with open(self.CompletedTransactionsFile, 'ab') as bin_file:  # 'ab' para agregar datos en formato binario
+                pickle.dump(self.results, bin_file)
+            self.logger.debug(f"{len(self.results)} Transacciones completadas {self.CompletedTransactionsFile}")
+            self.count_trx_complete += len(self.results)
+            self.results.clear()
+        except Exception as e:
+            self.logger.error(f"Error al escribir transacciones completadas al archivo: {e}")
+
+    def log_progress(self):
+        while self.keep_running:
+            parcial_time = time.time()
+            total_time = parcial_time - self.start_time            
+            self.logger.info(f"Total de transacciones marcadas como completadas {self.count_trx_complete}, y transacciones leídas {self.count_trx_read}")                               
+            if total_time > 3600 :
+                logging.info(f"Tiempo transcurrido: {total_time / 3600:.2f} horas.")
+            else:
+                logging.info(f"Tiempo transcurrido: {total_time / 60:.2f} minutos.")
+            time.sleep(self.timeToLog)  # Esperar x segundos
+
+    def write_dataconfig(self):
+        self.logger.info("VERSION 1.1")
+        self.logger.info(f"IncompleteTransactionsFile: {self.incomplete_transactions_file}")
+        self.logger.info(f"CompleteTransactionsFile: {self.CompletedTransactionsFile}")
+        self.logger.info(f"timeToLog: {self.timeToLog}")
+
+    
+if __name__ == "__main__":
+        
+    try:
+        process = ReviewIncomplete('./config/config.ini')
+        
+        process.process_incomplete()
+    except Exception as e:
+        logging.error(f"An error occurred: {e}")
+    finally:
+        end_time = time.time()
+        total_time = end_time - process.start_time
+        logging.info(f"Se escriben {process.count_trx_complete} transacciones completas de un total de {process.count_trx_read} leidas")
+
+        if total_time > 60 :
+            logging.info(f"Tiempo total: {total_time / 60:.2f} minutos.")
+        else:
+            logging.info(f"Tiempo total: {total_time:.2f} segundos.")
+

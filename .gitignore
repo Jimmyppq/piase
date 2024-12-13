@@ -3,6 +3,10 @@
 .DS_Store
 shellQA/
 *.db
+*.dat
+*.sql
+*.pkl
+*.sh
 app/testRendimiento.py
 app/qosprocesslite.py
 app/qosmetrics.py
@@ -10,3 +14,6 @@ app/qosmetrics_process.py
 configServer/config.ini
 configServer/config.ini
 configServer/config.ini
+app_server/
+qos*
+test*
