@@ -30,12 +30,14 @@ class BinaryTransactionReader:
         self.keep_running = True
         
         self.load_configuration_values()
+        self.write_dataconfig()
         
     def load_configuration_values(self):
         if 'PROCESS_FILES' not in self.config:
             self.logger.error("'PROCESS_FILES' section not found in the configuration file.")
             raise KeyError("'PROCESS_FILES' section not found in the configuration file.")
-        
+        # Archivo con las transacciones incompletas, de preferencia han de ser las que genera el "reviewIncomplete.py"
+        # funcionaría con el archivo de incompletas de duration, pero habrian varias incompletas no reales
         self.incomplete_transactions_file = self.config['PROCESS_FILES']['IncompleteReviewTransactionsFile']
         self.completed_transactions_file = self.config['PROCESS_FILES']['CompletedTransactionsFile']
         self.reviewTransactionsFile = self.config['PROCESS_FILES']['ReviewTransactionsFile']
@@ -72,7 +74,7 @@ class BinaryTransactionReader:
                         self.transactions_complete.extend(transactions)                        
                         self.process_transactions(transactions)
                         self.transactions_complete.clear()
-                        self.logger.info(f'Bloque de procesamiento completado {block_process}')  
+                        self.logger.debug(f'Bloque de procesamiento completado {block_process}')  
                         block_process +=1
                     except EOFError:
                         break
@@ -145,14 +147,18 @@ class BinaryTransactionReader:
                 while True:
                     try:
                         transactions = pickle.load(file)
-                        for transaction in transactions:
-                            count_trx += 1
+                        for transaction in transactions:                            
                             transaction_id = transaction['Transaction ID']
-                            index[transaction_id] = {
-                                'Date Min': transaction['Date Min'],
-                                'first_action': transaction['first_action'],
-                                'first_subcomponent': transaction['first_subcomponent']
-                            }                 
+                            # Se indexaran unicamente las transacciones que tengan envio registrado
+                            # Esto dado que solamente las que aparezcan como incompletas y enviadas, seran
+                            # buscadas dentro del archivo de transacciones completadas para adicionarlas
+                            if transaction['first_action'] == 'SEND' or transaction['Last Action'] == 'SEND':
+                                count_trx += 1
+                                index[transaction_id] = {
+                                    'Date Min': transaction['Date Min'],
+                                    'first_action': transaction['first_action'],
+                                    'first_subcomponent': transaction['first_subcomponent']
+                                }                 
 
                     except EOFError:
                         break
@@ -267,9 +273,18 @@ class BinaryTransactionReader:
         else:
             self.logger.info(f"El archivo binario {self.reviewTransactionsFile} no existía, no es necesario eliminarlo.")
 
+    def write_dataconfig(self):
+        self.logger.info("VERSION 1.6.1")
+        self.logger.info(f"IncompleteReviewTransactionsFile: {self.incomplete_transactions_file}")
+        self.logger.info(f"CompleteTransactionsFile: {self.completed_transactions_file}")
+        self.logger.info(f"ReviewTransactionsFile: {self.reviewTransactionsFile}")        
+        self.logger.info(f"timeToLog: {self.timeToLog}")
+        self.logger.info(f"resultFinalFile: {self.resultFinalFile}")
+
 if __name__ == "__main__":
     start_time = time.time()
     
+    count_trx_write = 0
     try:
         reader = BinaryTransactionReader('./config/config.ini')
         reader.clear_binary_file()
@@ -277,6 +292,7 @@ if __name__ == "__main__":
         reader.load_index()        
         reader.process_batch_incomplete_transactions()
         reader.write_binary_to_csv()
+        count_trx_write = reader.count_trx_write
         #reader.write_transactions_to_csv(reader.transactions_incomplete,'./output/allIncomplete.csv')
         #reader.read_completed_transactions()
         #reader.process_batch_incomplete_transactions()
@@ -288,7 +304,7 @@ if __name__ == "__main__":
     finally:
         end_time = time.time()
         total_time = end_time - start_time
-        logging.info(f'Transacciones escritas en review {reader.count_trx_write}')
+        logging.info(f'Transacciones escritas en review {count_trx_write}')
         if total_time > 60 :
             logging.info(f"Tiempo total: {total_time / 60:.2f} minutos.")
         else:

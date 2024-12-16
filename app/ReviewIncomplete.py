@@ -61,14 +61,17 @@ class ReviewIncomplete:
         self.mem_trx_security = self.config['PROCESS_FILES'].getint('mem_trx_security', 5000000)
 
     def process_incomplete(self) :
+        block = 0
         try:
             
             progress_thread = threading.Thread(target=self.log_progress, daemon=True)
-            progress_thread.start()
+            progress_thread.start()            
             with open(self.incomplete_transactions_file, 'rb') as file:
                 while True:
                     try:
                         transactions = pickle.load(file)
+                        self.logger.debug(f'transacciones cargadas {len(transactions)}')
+                        
                         for transaction in transactions:
                             transaction_id = transaction['Transaction ID']
                             self.transaction_dict[transaction_id].append({
@@ -86,6 +89,8 @@ class ReviewIncomplete:
                                 'NodeName': transaction['NodeName'],
                                 'Filename': transaction['Filename']
                             })
+                        block +=1
+                        self.logger.debug(f'Bloque de lectura: {block}')
                         self.process_transaction_block()
                         if self.results :                        
                             self.write_result_to_binary()
@@ -103,6 +108,7 @@ class ReviewIncomplete:
 
     def process_transaction_block(self):
         self.count_trx_read +=  len(self.transaction_dict)
+        self.logger.debug(f'Se reciben {len(self.transaction_dict)} trx para procesar')
         trx_out = trx_in = False
         count_trx_process = 0 
         for transaction_id, records in self.transaction_dict.items():            
@@ -136,47 +142,45 @@ class ReviewIncomplete:
                     result['Date Min']=date_min
                     result['first_subcomponent']=first_subcomponent
                     trx_in = True
-                    continue
+                elif first_action == 'SEND':
+                    result['Last Action']='SEND'
+                    result['date_max'] = date_min
+                    result['Last Subcomponent'] = first_subcomponent
+                    trx_out = True
+                    
                 if last_action == 'SEND':
                     result['Last Action']='SEND'
                     result['date_max'] = date_max
                     result['Last Subcomponent'] = last_subcomponent
                     trx_out = True
-                    continue
-                if  first_action == 'SEND':
-                    result['Last Action']='SEND'
-                    result['date_max'] = date_min
-                    result['Last Subcomponent'] = first_subcomponent
-                    trx_out = True
-                    continue
+
                 if first_subcomponent == 'FailOverManager':
                     result['date_in_collector']=date_in_collector
-                    continue
+                    
           
             if trx_in and trx_out : 
                 result['Duration'] = (result['date_max'] - result['Date Min']).total_seconds()
                 result['duration_limsp'] = (result['date_in_collector'] - result['Date Min']).total_seconds() if result['date_in_collector'] else None
                 self.results.append(result)
-            else:
+            else:                
                 self.result_incomplete.append(result)
 
             trx_out = trx_in = False
             count_trx_process +=1
 
             if count_trx_process > self.mem_trx_security :
-                self.write_result_to_binary()
+                self.write_result_to_binary()                
                 self.write_result_incomplete_to_binary()
-
+                count_trx_process = 0
+        
         self.transaction_dict.clear()
       
-       
-
-
     def write_result_to_binary(self):
         try:
+            self.logger.debug('Inicio de escritura')
             with open(self.CompletedTransactionsFile, 'ab') as bin_file:  # 'ab' para agregar datos en formato binario
                 pickle.dump(self.results, bin_file)
-            self.logger.debug(f"{len(self.results)} Transacciones completadas {self.CompletedTransactionsFile}")
+            self.logger.debug(f"{len(self.results)} transacciones escritas {self.CompletedTransactionsFile}")
             self.count_trx_complete += len(self.results)
             self.results.clear()
         except Exception as e:
@@ -197,9 +201,7 @@ class ReviewIncomplete:
         while self.keep_running:
             parcial_time = time.time()
             total_time = parcial_time - self.start_time   
-            self.logger.info(f'(tmp)Transacciones completas {process.count_trx_complete}')
-            self.logger.info(f'(tmp)Transacciones icompletas {process.count_trx_incomplete}')
-            self.logger.info(f'(tmp)Transacciones leídas {process.count_trx_read}')           
+            self.logger.info(f'(tmp)Trx completas {process.count_trx_complete}. Trx icompletas {process.count_trx_incomplete}. Trx leídas {process.count_trx_read}')       
             #self.logger.info(f"Total de transacciones marcadas como completadas {self.count_trx_complete}, y transacciones leídas {self.count_trx_read}")                               
             if total_time > 3600 :
                 logging.info(f"(tmp)Tiempo transcurrido: {total_time / 3600:.2f} horas.")
@@ -208,7 +210,7 @@ class ReviewIncomplete:
             time.sleep(self.timeToLog)  # Esperar x segundos
 
     def write_dataconfig(self):
-        self.logger.info("VERSION 1.2")
+        self.logger.info("VERSION 1.6")
         self.logger.info(f"IncompleteTransactionsFile: {self.incomplete_transactions_file}")
         self.logger.info(f"CompleteTransactionsFile: {self.CompletedTransactionsFile}")
         self.logger.info(f"IncompleteReviewTransactionsFile: {self.incomplete_transactions_review_file}")        
