@@ -343,9 +343,10 @@ class ProcessorFiles:
 
             #Si la transacción tiene un ciclo completo (entrada y salida) calcular duraciones y añadirlo a una lista para posteriormente escribirlo a disco
             if trx_in and trx_out :
-                result['Duration'] = result['date_max'] -  result['Date Min']             
+                result['Duration'] = (result['date_max'] - result['Date Min']).total_seconds()       
+                      
                 if flowctrl :
-                    result['duration_limsp'] =  result['date_in_collector'] -  result['Date Min']
+                    result['duration_limsp'] = (result['date_in_collector'] - result['Date Min']).total_seconds()
                 self.results.append(result)
             elif incomplete_ok : 
                 #Si la transacción no tiene un ciclo completo, pero tiene un NEWTRANS o un SEND se añade a la ventana, de lo contrario no se contempla
@@ -438,7 +439,7 @@ class ProcessorFiles:
         return None
 
     def write_dataconfig(self):
-        self.logger.info("VERSION 1.6.2")
+        self.logger.info("VERSION 1.6.3")
         self.logger.info(f"inputPath: {self.inputFile}")
         self.logger.info(f"filePattern: {self.filePattern}")
         self.logger.info(f"IncompleteTransactionsFile: {self.IncompleteTransactionsFile}")

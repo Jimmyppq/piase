@@ -24,6 +24,9 @@ class BinaryTransactionReader:
         self.count_actualizadas = 0  
         self.count_process_complete = 0
 
+        #Define el numero del lote de indice
+        self.index_block = 0
+
         #cuando el archivo de incompletas no existe (posiblemente solo suceda en entornos de prueba) 
         #se pone False para que no se cree el indice y posteriormente no se utilice para escribir el binario   
         self.exist_incomplete_transactiones = True 
@@ -66,22 +69,35 @@ class BinaryTransactionReader:
         progress_thread = threading.Thread(target=self.log_progress, daemon=True)
         progress_thread.start()
         block_process = 1
+
+
+        # Cantidad de transacciones que se van acumulando en la lista transactions_complete antes de ser enviadas al método
+        # process_transactions. Cada que se envian a este método este se recorre todos los indices, por eso se debe minimizar
+        # todo lo posible la invocación de este método 
+        count_trx_complete_load = 0
         try:
             with open(self.completed_transactions_file, 'rb') as file:
                 while True:
                     try:
                         transactions = pickle.load(file)
-                        self.transactions_complete.extend(transactions)                        
-                        self.process_transactions(transactions)
-                        self.transactions_complete.clear()
-                        self.logger.debug(f'Bloque de procesamiento completado {block_process}')  
-                        block_process +=1
+                        count_trx_complete_load += len(transactions)
+                        self.transactions_complete.extend(transactions)
+                        if count_trx_complete_load > 3000000:                                                
+                            self.process_transactions(block_process)
+                            self.transactions_complete.clear()
+                            self.logger.debug(f'Bloque de procesamiento completado {block_process}')  
+                            block_process +=1
+                            count_trx_complete_load = 0
                     except EOFError:
                         break
         except Exception as e:
             self.logger.error(f"Error al leer las transacciones incompletas del archivo binario: {e}")
             sys.exit(1)
-        
+
+        if self.transactions_complete :
+            self.process_transactions(block_process)
+            self.logger.debug(f'Bloque de procesamiento final {block_process}') 
+
         if self.group_trx_complete_towrite :
             self.logger.debug('last block...')                        
             self.write_binary_send_review()
@@ -91,37 +107,38 @@ class BinaryTransactionReader:
         self.keep_running = False
         progress_thread.join()
    
-    def process_transactions(self, block_transactions_complete):
-        
-        total_trx_block = 0
+    def process_transactions(self, block_process):
+        #ELIMINAR!!!!!!!!!!
+        self.index_block = 2
+
+        self.logger.debug(f'Se van a procesar {len(self.transactions_complete)} trxs - block: {block_process}')        
         if self.exist_incomplete_transactiones :
-            for complete_transaction in block_transactions_complete:  
-                self.count_process_complete += 1
-                total_trx_block +=1          
-                transaction_id_complete = complete_transaction['Transaction ID']
-                if transaction_id_complete  in self.index_incomplete:
-                    transaction_incomplete_details = self.index_incomplete[transaction_id_complete]
-                    complete_transaction['Date Min'] = transaction_incomplete_details['Date Min']
-                    complete_transaction['first_action'] = transaction_incomplete_details['first_action']
-                    complete_transaction['first_subcomponent'] = transaction_incomplete_details['first_subcomponent']
-                    self.count_actualizadas +=1
-                    self.group_trx_complete_towrite.append(complete_transaction)                
-                    continue
-                if self.count_process_complete % 700000 == 0 :                
-                    #ejecutado así para pruebas, pero procesar en un hilo, se deja documentado por sino se alcanza a probar que luego no se olvide
-                    self.write_binary_send_review()             
-                    self.logger.debug('Escritura finalizada')
-                
-                self.group_trx_complete_towrite.append(complete_transaction)
+            for i in range(self.index_block):
+                self.load_index(i+1) 
+                for complete_transaction in self.transactions_complete:  
+                    self.count_process_complete += 1                         
+                    transaction_id_complete = complete_transaction['Transaction ID']
+                    if transaction_id_complete  in self.index_incomplete:
+                        transaction_incomplete_details = self.index_incomplete[transaction_id_complete]
+                        complete_transaction['Date Min'] = transaction_incomplete_details['Date Min']
+                        complete_transaction['first_action'] = transaction_incomplete_details['first_action']
+                        complete_transaction['first_subcomponent'] = transaction_incomplete_details['first_subcomponent']
+                        self.count_actualizadas +=1
+                        self.group_trx_complete_towrite.append(complete_transaction)                
+                        continue
+                    if self.count_process_complete % 700000 == 0 :                
+                        #ejecutado así para pruebas, pero procesar en un hilo, se deja documentado por sino se alcanza a probar que luego no se olvide
+                        self.write_binary_send_review()             
+                        self.logger.debug('Escritura finalizada')                
+                    self.group_trx_complete_towrite.append(complete_transaction)
+
+            self.logger.debug(f'Procesamiento terminado ({block_process})') 
             return
 
-        for complete_transaction in block_transactions_complete: 
+        for complete_transaction in self.transactions_complete: 
             self.count_process_complete += 1
-            self.group_trx_complete_towrite.append(complete_transaction)             
+            self.group_trx_complete_towrite.append(complete_transaction)            
         
-        #self.logger.debug(f'Cantidad de transacciones procesadas en este bloque {total_trx_block}')      
-        #self.logger.info(f"Transacciones procesadas hasta ahora: {self.count_process_complete} y encontradas como incompletas {self.count_actualizadas}")
-
                 
     def log_progress(self):
         while self.keep_running:
@@ -139,7 +156,14 @@ class BinaryTransactionReader:
             return  # Salir del método si el archivo no existe
 
         index = {}
-        count_trx = 0
+        # Cantidad de transacciones indexadas, solo se indexan transacciones con SEND. Se utiliza al final para informar en un log cuantas trx ha indexado
+        count_trx = 0 
+
+        #Cantidad de transacciones indexadas en un grupo de carga, es necesario reiniciarlo cada que llegue al umbral definido por eso no se puede utilizar el anterior
+        count_trx_limit = 0 
+
+        
+
         
         self.logger.info('Creando índice trx incomplete')
         try:
@@ -154,55 +178,50 @@ class BinaryTransactionReader:
                             # buscadas dentro del archivo de transacciones completadas para adicionarlas
                             if transaction['first_action'] == 'SEND' or transaction['Last Action'] == 'SEND':
                                 count_trx += 1
+                                count_trx_limit += 1
                                 index[transaction_id] = {
                                     'Date Min': transaction['Date Min'],
                                     'first_action': transaction['first_action'],
                                     'first_subcomponent': transaction['first_subcomponent']
-                                }                 
-
+                                }
+                                                                 
+                        if count_trx_limit > 7000000 :                            
+                            try:
+                                self.index_block +=1
+                                index_filename = f'./output/transactions_index{self.index_block}.pkl'
+                                #Si el arhivo existe se sobre-escribe (w)
+                                with open(index_filename, 'wb') as index_file:
+                                    pickle.dump(index, index_file)
+                                self.logger.info(f"Índice {self.index_block} guardado  con éxito. Transacciones indexadas: {count_trx_limit}")
+                                count_trx_limit = 0
+                                index.clear()
+                            except Exception as e:
+                                self.logger.error(f"Error al guardar el índice {self.index_block}: {e}")
+                                sys.exit(1)  
                     except EOFError:
                         break
         except Exception as e:
-            self.logger.error(f"Error al crear el índice del archivo binario: {e}")
+            self.logger.error(f"Error al crear el índice {self.index_block} del archivo binario: {e}")
             sys.exit(1)
-
-        try:
-            index_filename = './output/transactions_index.pkl'
-            with open(index_filename, 'wb') as index_file:
-                pickle.dump(index, index_file)
-            self.logger.info(f"Índice guardado con éxito. Cantidad total de transacciones indexadas: {count_trx}")
-        except Exception as e:
-            self.logger.error(f"Error al guardar el índice completo: {e}")
-            sys.exit(1)
+        self.logger.info(f'Total de transacciones indexadas {count_trx}')
 
 
 
-    def load_index(self):
-        self.logger.info('Cargando indice en memoria')
-        file_name_index = './output/transactions_index.pkl'
+    def load_index(self,block_number):
+        
+        self.index_incomplete.clear()        
+        file_name_index = f'./output/transactions_index{block_number}.pkl'
+        self.logger.info(f'Cargando indice {block_number} en memoria: {file_name_index}')
         try:
             with open(file_name_index, 'rb') as index_file:
-                self.index_incomplete = pickle.load(index_file)
-            self.logger.info("Índice cargado en memoria con éxito.")
+                self.index_incomplete = pickle.load(index_file)            
+            self.logger.info(f"Índice {block_number} cargado en memoria con éxito. {len(self.index_incomplete)}")
         except Exception as e:
             self.logger.error(f"Error al cargar el índice del archivo binario: {e}")
             sys.exit(1)  # Detener la ejecución si el índice no se puede cargar
         
-    def count_lines_in_file(self, file_path):
-            line_count = 0
-            try:
-                with open(file_path, 'rb') as file:
-                    while True:
-                        try:
-                            transactions = pickle.load(file)
-                            line_count += len(transactions)
-                        except EOFError:
-                            break
-                self.logger.info(f"El archivo {file_path} contiene {line_count} líneas.")
-            except Exception as e:
-                self.logger.error(f"Error al contar las líneas del archivo binario {file_path}: {e}")
-            return line_count
-
+   # Escribe las el contenido de la lista group_trx_complete_towrite el cual cntiene las transacciones  
+   # completadas que se han modificado previamente para complementarla con el indice de incompletas si es que existian. 
     def write_binary_send_review(self) :
         self.logger.debug('Inicia escritura de bloque de transacciones revisadas')
         trx_to_write = 0
@@ -274,7 +293,7 @@ class BinaryTransactionReader:
             self.logger.info(f"El archivo binario {self.reviewTransactionsFile} no existía, no es necesario eliminarlo.")
 
     def write_dataconfig(self):
-        self.logger.info("VERSION 1.6.1")
+        self.logger.info("VERSION 1.7.2.b")
         self.logger.info(f"IncompleteReviewTransactionsFile: {self.incomplete_transactions_file}")
         self.logger.info(f"CompleteTransactionsFile: {self.completed_transactions_file}")
         self.logger.info(f"ReviewTransactionsFile: {self.reviewTransactionsFile}")        
@@ -288,10 +307,11 @@ if __name__ == "__main__":
     try:
         reader = BinaryTransactionReader('./config/config.ini')
         reader.clear_binary_file()
-        reader.create_index()
-        reader.load_index()        
+        #reader.create_index()
+ 
         reader.process_batch_incomplete_transactions()
         reader.write_binary_to_csv()
+
         count_trx_write = reader.count_trx_write
         #reader.write_transactions_to_csv(reader.transactions_incomplete,'./output/allIncomplete.csv')
         #reader.read_completed_transactions()
