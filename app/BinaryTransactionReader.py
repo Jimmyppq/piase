@@ -108,8 +108,7 @@ class BinaryTransactionReader:
         progress_thread.join()
    
     def process_transactions(self, block_process):
-        #ELIMINAR!!!!!!!!!!
-        self.index_block = 2
+        
 
         self.logger.debug(f'Se van a procesar {len(self.transactions_complete)} trxs - block: {block_process}')        
         if self.exist_incomplete_transactiones :
@@ -137,7 +136,8 @@ class BinaryTransactionReader:
 
         for complete_transaction in self.transactions_complete: 
             self.count_process_complete += 1
-            self.group_trx_complete_towrite.append(complete_transaction)            
+            self.group_trx_complete_towrite.append(complete_transaction)
+            self.write_binary_send_review()             
         
                 
     def log_progress(self):
@@ -307,7 +307,7 @@ if __name__ == "__main__":
     try:
         reader = BinaryTransactionReader('./config/config.ini')
         reader.clear_binary_file()
-        #reader.create_index()
+        reader.create_index()
  
         reader.process_batch_incomplete_transactions()
         reader.write_binary_to_csv()

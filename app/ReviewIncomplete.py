@@ -62,8 +62,7 @@ class ReviewIncomplete:
 
     def process_incomplete(self) :
         block = 0
-        try:
-            
+        try:            
             progress_thread = threading.Thread(target=self.log_progress, daemon=True)
             progress_thread.start()            
             with open(self.incomplete_transactions_file, 'rb') as file:

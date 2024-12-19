@@ -9,6 +9,7 @@ from datetime import datetime
 import time
 from pathlib import Path
 from collections import defaultdict
+import copy
 
 class ProcessorFiles:
     def __init__(self, config_file):
@@ -191,6 +192,7 @@ class ProcessorFiles:
             self.write_result_to_binary()
 
         if self.results_inprogress :
+            #atencion, se esta duplicando el tamanio en memoria de los incompletos, ya esta en una variable self, sobra esta asignacion
             exceeding_records = self.results_inprogress
             self.write_exceeding_records_to_binary(exceeding_records)
             
@@ -277,6 +279,7 @@ class ProcessorFiles:
         for transaction_id, records in self.data_line.items():
             if transaction_id in records_previous:
                 result = records_previous[transaction_id]
+                trx_in = True
             else:
                 result = {
                         'Transaction ID': transaction_id,
@@ -302,18 +305,42 @@ class ProcessorFiles:
                 priority = record.get('priority', -1)
                 mtransaction_id = record.get('mtransaction_id')
 
-                if mtransaction_id is not None :
-                    result['Transaction ID'] = mtransaction_id
-
                 if priority != -1:
                     result['Priority'] = priority
-                if action == 'NEWTRANS' or action == 'MNEWTRANS':
+
+                if mtransaction_id is not None :
+                    result['Transaction ID'] = mtransaction_id
+                    transaction_id = mtransaction_id
+                    if not trx_in :
+                        # esta condicion asegura que en los valores "min" tengan prioridad 
+                        # los NEWTRANS, y solo se ponga el valor de MNEWTRANS cuando no haya un NEWTRANS 
+                        result['Date Min'] = timestamp
+                        result['first_action'] = action
+                        result['first_subcomponent'] = subcomponent
+                        incomplete_ok = True
+                        trx_in = True
+                    continue
+                
+                if action == 'NEWTRANS':
                     result['Date Min'] = timestamp
                     result['first_action'] = action
                     result['first_subcomponent'] = subcomponent
                     incomplete_ok = True
                     trx_in = True
-                    continue                
+                    continue
+                #comento este bloque, en principio si hay un MNEWTRANS es porque se ha desdoblado lo cual 
+                # se valida en el if mtransaction_id is not None mas arriba asi que se pondra parte de esta
+                # logica arriba .
+
+                '''elif action == 'MNEWTRANS' and not trx_in : 
+                    # esta condicion independiente para MNEWTRANS asegura que en los valores "min" tengan prioridad 
+                    # los NEWTRANS, y solo se ponga el valor de MNEWTRANS cuando no haya un NEWTRANS 
+                    result['Date Min'] = timestamp
+                    result['first_action'] = action
+                    result['first_subcomponent'] = subcomponent
+                    incomplete_ok = True
+                    trx_in = True
+                    continue'''                
                 if action == 'SEND':
                     records_multisend[transaction_id] = [] 
                     if result['countSend'] == 0:                       
@@ -347,12 +374,15 @@ class ProcessorFiles:
                       
                 if flowctrl :
                     result['duration_limsp'] = (result['date_in_collector'] - result['Date Min']).total_seconds()
-                self.results.append(result)
+                self.results.append(copy.deepcopy(result))
             elif incomplete_ok : 
                 #Si la transacción no tiene un ciclo completo, pero tiene un NEWTRANS o un SEND se añade a la ventana, de lo contrario no se contempla
-                self.results_inprogress.append(result) 
-                self.count_incomplete +=1              
-            
+                self.results_inprogress.append(copy.deepcopy(result))
+                records_previous[transaction_id] = copy.deepcopy(result)
+                #records_previous[transaction_id] = result 
+                self.count_incomplete +=1    
+                          
+            result.clear()
             flowctrl = False 
             incomplete_ok = False
             trx_out = False
@@ -383,7 +413,7 @@ class ProcessorFiles:
                 self.logger.error(f"Error al escribir transacciones completadas al archivo: {e}")
 
     def log_file_generator(self, file_path):
-        with open(file_path, 'r') as file:
+        with open(file_path, 'r') as file: 
             for line in file:
                 processed_line = self.process_log_line(line)
                 if processed_line:
@@ -439,7 +469,7 @@ class ProcessorFiles:
         return None
 
     def write_dataconfig(self):
-        self.logger.info("VERSION 1.6.3")
+        self.logger.info("VERSION 2.5")
         self.logger.info(f"inputPath: {self.inputFile}")
         self.logger.info(f"filePattern: {self.filePattern}")
         self.logger.info(f"IncompleteTransactionsFile: {self.IncompleteTransactionsFile}")
