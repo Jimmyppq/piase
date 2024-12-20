@@ -130,6 +130,9 @@ class BinaryTransactionReader:
                         self.write_binary_send_review()             
                         self.logger.debug('Escritura finalizada')                
                     self.group_trx_complete_towrite.append(complete_transaction)
+                    
+            if self.group_trx_complete_towrite :
+                self.write_binary_send_review() 
 
             self.logger.debug(f'Procesamiento terminado ({block_process})') 
             return
@@ -241,13 +244,16 @@ class BinaryTransactionReader:
         Convierte un archivo binario con transacciones en un archivo CSV.
         Procesa en bloques para mejorar el rendimiento y manejar grandes archivos.
         """
+        file_to_process = ""
         # Verificar existencia del archivo binario
         if not os.path.exists(self.reviewTransactionsFile):
-            self.logger.error(f"No se encuentra el archivo binario: {self.reviewTransactionsFile}")
-            return
+            self.logger.error(f"No se encuentra el archivo binario para escribir el CSV: {self.reviewTransactionsFile}. Se utilizara el archivo de completadas inicial sin cambios")
+            file_to_process = self.completed_transactions_file
+        else :
+            file_to_process = self.reviewTransactionsFile
 
         try:
-            with open(self.reviewTransactionsFile, 'rb') as binary_file, open(self.resultFinalFile, 'a', newline='') as csv_file:
+            with open(file_to_process, 'rb') as binary_file, open(self.resultFinalFile, 'a', newline='') as csv_file:
                 csv_writer = csv.DictWriter(csv_file, fieldnames=[
                     'Transaction ID', 'Date Min', 'date_max', 'Priority',
                     'first_action', 'first_subcomponent', 'Last Action', 'Last Subcomponent',
@@ -293,7 +299,7 @@ class BinaryTransactionReader:
             self.logger.info(f"El archivo binario {self.reviewTransactionsFile} no existía, no es necesario eliminarlo.")
 
     def write_dataconfig(self):
-        self.logger.info("VERSION 1.7.2.b")
+        self.logger.info("VERSION 1.7.3")
         self.logger.info(f"IncompleteReviewTransactionsFile: {self.incomplete_transactions_file}")
         self.logger.info(f"CompleteTransactionsFile: {self.completed_transactions_file}")
         self.logger.info(f"ReviewTransactionsFile: {self.reviewTransactionsFile}")        
@@ -308,7 +314,6 @@ if __name__ == "__main__":
         reader = BinaryTransactionReader('./config/config.ini')
         reader.clear_binary_file()
         reader.create_index()
- 
         reader.process_batch_incomplete_transactions()
         reader.write_binary_to_csv()
 
