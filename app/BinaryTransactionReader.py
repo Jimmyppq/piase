@@ -165,9 +165,6 @@ class BinaryTransactionReader:
         #Cantidad de transacciones indexadas en un grupo de carga, es necesario reiniciarlo cada que llegue al umbral definido por eso no se puede utilizar el anterior
         count_trx_limit = 0 
 
-        
-
-        
         self.logger.info('Creando índice trx incomplete')
         try:
             with open(self.incomplete_transactions_file, 'rb') as file:
@@ -203,6 +200,19 @@ class BinaryTransactionReader:
                                 sys.exit(1)  
                     except EOFError:
                         break
+            if index :
+                #escribir transacciones restantes
+                try:
+                    self.index_block +=1
+                    index_filename = f'./output/transactions_index{self.index_block}.pkl'
+                    #Si el arhivo existe se sobre-escribe (w)
+                    with open(index_filename, 'wb') as index_file:
+                        pickle.dump(index, index_file)
+                    self.logger.info(f"Índice {self.index_block} guardado  con éxito. Transacciones indexadas: {count_trx_limit}")                    
+                    index.clear()
+                except Exception as e:
+                    self.logger.error(f"Error al guardar el índice {self.index_block}: {e}")
+                    sys.exit(1)    
         except Exception as e:
             self.logger.error(f"Error al crear el índice {self.index_block} del archivo binario: {e}")
             sys.exit(1)
@@ -247,7 +257,7 @@ class BinaryTransactionReader:
         file_to_process = ""
         # Verificar existencia del archivo binario
         if not os.path.exists(self.reviewTransactionsFile):
-            self.logger.error(f"No se encuentra el archivo binario para escribir el CSV: {self.reviewTransactionsFile}. Se utilizara el archivo de completadas inicial sin cambios")
+            self.logger.warning(f"No se encuentra el archivo binario para escribir el CSV: {self.reviewTransactionsFile}. Se utilizara el archivo de completadas inicial sin cambios")
             file_to_process = self.completed_transactions_file
         else :
             file_to_process = self.reviewTransactionsFile
@@ -299,7 +309,7 @@ class BinaryTransactionReader:
             self.logger.info(f"El archivo binario {self.reviewTransactionsFile} no existía, no es necesario eliminarlo.")
 
     def write_dataconfig(self):
-        self.logger.info("VERSION 1.7.3")
+        self.logger.info("VERSION 1.7.5")
         self.logger.info(f"IncompleteReviewTransactionsFile: {self.incomplete_transactions_file}")
         self.logger.info(f"CompleteTransactionsFile: {self.completed_transactions_file}")
         self.logger.info(f"ReviewTransactionsFile: {self.reviewTransactionsFile}")        
