@@ -1,4 +1,3 @@
-import csv
 import os
 import pickle
 import logging
@@ -8,8 +7,6 @@ import sys
 import threading
 from datetime import datetime
 from collections import defaultdict
-
-
 
 class ReviewIncomplete:
     def __init__(self, config_file):
@@ -24,10 +21,13 @@ class ReviewIncomplete:
         self.count_trx_complete = 0
         self.count_trx_incomplete = 0
         self.count_trx_read = 0
+        self.count_trx_process = 0
         self.keep_running = True # establece cuando detener el hilo que escribe los logs
         self.transaction_dict = defaultdict(list)
-        self.mem_trx_security = 0
 
+        self.thread_complete = None
+        self.thread_incomplete = None
+        
         self.setup_logging()
         self.load_configuration_values()
         self.write_dataconfig()
@@ -42,12 +42,25 @@ class ReviewIncomplete:
         log_level = getattr(logging, log_level_str, logging.INFO)
 
         # Logger principal con fecha en el nombre del archivo
-        log_file_path = self.config['LOGGING']['LogFilePathIncomplete']
+        log_file_path = self.config['LOGGING'].get('LogFilePathIncomplete','./logs/log_processIncomplete')
+        log_file_path_write = self.config['LOGGING'].get('LogFilePathIncomplete_write', './logs/log_processIncomplete_write.log')
+
         log_file_path_with_date = f"{os.path.splitext(log_file_path)[0]}_{datetime.now().strftime('%Y-%m-%d')}{os.path.splitext(log_file_path)[1]}"
+        log_file_path_write_with_date = f"{os.path.splitext(log_file_path_write)[0]}_{datetime.now().strftime('%Y-%m-%d')}{os.path.splitext(log_file_path_write)[1]}"
+
         logging.basicConfig(filename=log_file_path_with_date,
                             level=log_level,
                             format='%(asctime)s - %(levelname)s - %(message)s')
-        self.logger = logging.getLogger()     
+        self.logger = logging.getLogger()
+
+        file_handler_write = logging.FileHandler(log_file_path_write_with_date)
+        file_handler_write.setLevel(log_level)
+        file_handler_write.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+
+        self.logger_write = logging.getLogger('logger_write')
+        self.logger_write.addHandler(file_handler_write)
+        self.logger_write.setLevel(log_level)
+        self.logger_write.propagate = False     
 
     def load_configuration_values(self):
         if 'PROCESS_FILES' not in self.config:
@@ -58,18 +71,23 @@ class ReviewIncomplete:
         self.CompletedTransactionsFile = self.config['PROCESS_FILES']['CompletedTransactionsFile']
         self.incomplete_transactions_review_file = self.config['PROCESS_FILES']['IncompleteReviewTransactionsFile'] #Las nuevas incompletas que generará esta clase
         self.timeToLog = self.config['PROCESS_FILES'].getint('timeToLog', fallback=60)
-        self.mem_trx_security = self.config['PROCESS_FILES'].getint('mem_trx_security', 5000000)
-
+        self.chunk_size = self.config['PROCESS_FILES'].getint('Chunk_size', fallback=5000000)        
+        self.mem_trx_security = self.chunk_size * 0.1        
+               
     def process_incomplete(self) :
         block = 0
         try:            
             progress_thread = threading.Thread(target=self.log_progress, daemon=True)
-            progress_thread.start()            
+            progress_thread.start()
+            if not os.path.exists(self.incomplete_transactions_file):
+                self.logger.error(f"El archivo {self.incomplete_transactions_file} no existe. Terminando la ejecución.")
+                sys.exit(1)  # Terminar el programa con un código de error
+                            
             with open(self.incomplete_transactions_file, 'rb') as file:
                 while True:
                     try:
                         transactions = pickle.load(file)
-                        self.logger.debug(f'transacciones cargadas {len(transactions)}')
+                        self.logger.debug(f'transacciones cargadas {len(transactions)} - bloque {block}')
                         
                         for transaction in transactions:
                             transaction_id = transaction['Transaction ID']
@@ -91,16 +109,23 @@ class ReviewIncomplete:
                         block +=1
                         self.logger.debug(f'Bloque de lectura: {block}')
                         self.process_transaction_block()
-                        if self.results :                        
-                            self.write_result_to_binary()
-                        if self.result_incomplete :
-                            self.write_result_incomplete_to_binary()
                         
 
                     except EOFError:
                         break
+            if self.results :
+                thread_complete = threading.Thread(target=self.write_result_to_binary, daemon=True)
+                thread_complete.start()   
+            if self.result_incomplete :
+                thread_incomplete = threading.Thread(target=self.write_result_incomplete_to_binary, daemon=True)
+                thread_incomplete.start()
+
             self.keep_running = False
             progress_thread.join()
+            if hasattr(self, 'thread_complete') and self.thread_complete.is_alive():
+                self.thread_complete.join()
+            if hasattr(self, 'thread_incomplete') and self.thread_incomplete.is_alive():
+                self.thread_incomplete.join()
         except Exception as e:
             self.logger.error(f"Error al leer las transacciones incompletas del archivo binario: {e}")
             sys.exit(1)
@@ -109,7 +134,13 @@ class ReviewIncomplete:
         self.count_trx_read +=  len(self.transaction_dict)
         self.logger.debug(f'Se reciben {len(self.transaction_dict)} trx para procesar')
         trx_out = trx_in = False
-        count_trx_process = 0 
+        
+
+        if hasattr(self, 'thread_complete') and self.thread_complete.is_alive():
+            self.thread_complete.join()
+        if hasattr(self, 'thread_incomplete') and self.thread_incomplete.is_alive():
+            self.thread_incomplete.join()
+
         for transaction_id, records in self.transaction_dict.items():            
             result = {
                 'Transaction ID': transaction_id,
@@ -136,7 +167,7 @@ class ReviewIncomplete:
                 last_subcomponent = record['Last Subcomponent']
                 date_in_collector = record['date_in_collector']
 
-                if first_action == 'NEWTRANS' or first_action == 'MNEWTRANS':
+                if first_action == 'NEWTRANS':
                     result['first_action']=first_action
                     result['Date Min']=date_min
                     result['first_subcomponent']=first_subcomponent
@@ -165,35 +196,58 @@ class ReviewIncomplete:
                 self.result_incomplete.append(result)
 
             trx_out = trx_in = False
-            count_trx_process +=1
+            self.count_trx_process +=1
 
-            if count_trx_process > self.mem_trx_security :
-                self.write_result_to_binary()                
-                self.write_result_incomplete_to_binary()
-                count_trx_process = 0
+        if self.count_trx_process > self.mem_trx_security :
+            self.write_in_threads()
+            self.count_trx_process = 0
         
         self.transaction_dict.clear()
-      
+
+    
+
+    def write_in_threads(self):
+        # Crear los hilos
+        self.thread_complete = threading.Thread(target=self.write_result_to_binary, daemon=True)
+        self.thread_incomplete = threading.Thread(target=self.write_result_incomplete_to_binary, daemon=True)
+        
+        # Iniciar los hilos
+        self.thread_complete.start()
+        self.thread_incomplete.start()
+
+        # Esperar a que los hilos terminen si es necesario
+        #thread_complete.join()
+        #thread_incomplete.join()
+
     def write_result_to_binary(self):
         try:
-            self.logger.debug('Inicio de escritura')
+            if not self.results:  # Verifica si self.results está vacío
+                self.logger_write.debug('No hay transacciones completas para escribir.')
+                return
+            
+            self.logger_write.debug('Inicio de escritura Completas')
             with open(self.CompletedTransactionsFile, 'ab') as bin_file:  # 'ab' para agregar datos en formato binario
                 pickle.dump(self.results, bin_file)
-            self.logger.debug(f"{len(self.results)} transacciones escritas {self.CompletedTransactionsFile}")
+            self.logger_write.debug(f"{len(self.results)} transacciones completas {self.CompletedTransactionsFile}")
             self.count_trx_complete += len(self.results)
             self.results.clear()
         except Exception as e:
-            self.logger.error(f"Error al escribir transacciones completadas al archivo: {e}")
+            self.logger_write.error(f"Error al escribir transacciones completadas al archivo: {e}")
 
     def write_result_incomplete_to_binary(self):
         try:
+            if not self.result_incomplete:  # Verifica si self.result_incomplete está vacío
+                self.logger_write.debug('No hay transacciones incompletas para escribir.')
+                return
+            
+            self.logger_write.debug('Inicio de escritura Incompletas')
             with open(self.incomplete_transactions_review_file, 'ab') as bin_file:  # 'ab' para agregar datos en formato binario
                 pickle.dump(self.result_incomplete, bin_file)
-            self.logger.debug(f"{len(self.result_incomplete)} Transacciones incompletadas {self.incomplete_transactions_review_file}")
+            self.logger_write.debug(f"{len(self.result_incomplete)} Transacciones incompletadas {self.incomplete_transactions_review_file}")
             self.count_trx_incomplete += len(self.result_incomplete)
             self.result_incomplete.clear()
         except Exception as e:
-            self.logger.error(f"Error al escribir transacciones completadas al archivo: {e}")
+            self.logger_write.error(f"Error al escribir transacciones incompletadas al archivo: {e}")
 
 
     def log_progress(self):
@@ -209,7 +263,7 @@ class ReviewIncomplete:
             time.sleep(self.timeToLog)  # Esperar x segundos
 
     def write_dataconfig(self):
-        self.logger.info("VERSION 1.6")
+        self.logger.info("VERSION 2.0-a")
         self.logger.info(f"IncompleteTransactionsFile: {self.incomplete_transactions_file}")
         self.logger.info(f"CompleteTransactionsFile: {self.CompletedTransactionsFile}")
         self.logger.info(f"IncompleteReviewTransactionsFile: {self.incomplete_transactions_review_file}")        
@@ -229,7 +283,7 @@ if __name__ == "__main__":
         end_time = time.time()
         total_time = end_time - process.start_time
         logging.info(f'Transacciones completas {process.count_trx_complete}')
-        logging.info(f'Transacciones icompletas {process.count_trx_incomplete}')
+        logging.info(f'Transacciones incompletas {process.count_trx_incomplete}')
         logging.info(f'Transacciones leídas {process.count_trx_read}')       
 
         if total_time > 60 :
