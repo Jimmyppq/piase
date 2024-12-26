@@ -57,9 +57,6 @@ class ProcessorFiles:
         })'''
         self.keep_running = True # establece cuando detener el hilo que escribe los logs
 
-        self.thread_complete = threading.Thread(target=self.write_result_to_binary, daemon=True)
-        self.thread_incomplete = threading.Thread(target=self.write_incomplete_to_binary, daemon=True)
-
         self.load_configuration_values() 
         self.start_time = time.time()
 
@@ -197,6 +194,7 @@ class ProcessorFiles:
             '''if self.countFiles > 182 :
                 break'''
         
+
 
         ########################################################
         ##### se documenta para pruebas, eliminar esta documentacion
@@ -402,7 +400,11 @@ class ProcessorFiles:
 
         self.process = False
    
-    def write_in_threads(self):           
+    def write_in_threads(self): 
+        
+        self.thread_complete = threading.Thread(target=self.write_result_to_binary, daemon=True)
+        self.thread_incomplete = threading.Thread(target=self.write_incomplete_to_binary, daemon=True)
+
         # Iniciar los hilos
         self.thread_complete.start()
         self.thread_incomplete.start()
@@ -410,7 +412,7 @@ class ProcessorFiles:
     def write_incomplete_to_binary(self):
         try:
             if not self.records_incomplete:  # Verifica si self.records_incomplete está vacío
-                self.logger_write.debug('No hay transacciones incompletas para escribir.')
+                self.logger.debug('No hay transacciones incompletas para escribir.')
                 return
             
             self.logger.debug(f"Se inicia escritura de transacciones incompletas al archivo binario")
@@ -449,7 +451,7 @@ class ProcessorFiles:
     def write_result_to_binary(self):
         try:
             if not self.records_complete:  # Verifica si self.records_complete está vacío
-                self.logger_write.debug('No hay transacciones completas para escribir.')
+                self.logger.debug('No hay transacciones completas para escribir.')
                 return
             
             self.logger.debug(f"Se inicia escritura de transacciones completas al archivo binario")
@@ -518,7 +520,7 @@ class ProcessorFiles:
         return None
 
     def write_dataconfig(self):
-        self.logger.info("VERSION 2.9.a")
+        self.logger.info("VERSION 2.9.d")
         self.logger.info(f"inputPath: {self.inputFile}")
         self.logger.info(f"filePattern: {self.filePattern}")
         self.logger.info(f"IncompleteTransactionsFile: {self.IncompleteTransactionsFile}")

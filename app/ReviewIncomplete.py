@@ -24,9 +24,6 @@ class ReviewIncomplete:
         self.count_trx_process = 0
         self.keep_running = True # establece cuando detener el hilo que escribe los logs
         self.transaction_dict = defaultdict(list)
-
-        self.thread_complete = None
-        self.thread_incomplete = None
         
         self.setup_logging()
         self.load_configuration_values()

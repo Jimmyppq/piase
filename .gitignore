@@ -20,3 +20,5 @@ test*
 app/log-processor.py
 app/ReadFiles.py
 transacciones_descartadas.txt
+/configServer
+log_processIncomplete_writejp_2024-12-24
