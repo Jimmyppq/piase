@@ -206,7 +206,7 @@ class ProcessorFiles:
             self.write_result_to_binary()
 
         if self.records_incomplete :  
-            self.write_incomplete_to_binary()
+            self.write_incomplete_to_binary(True)
         ########################################################
         ######################################################## 
             
@@ -409,7 +409,7 @@ class ProcessorFiles:
         self.thread_complete.start()
         self.thread_incomplete.start()
 
-    def write_incomplete_to_binary(self):
+    def write_incomplete_to_binary(self,final=False):
         try:
             if not self.records_incomplete:  # Verifica si self.records_incomplete está vacío
                 self.logger.debug('No hay transacciones incompletas para escribir.')
@@ -421,6 +421,10 @@ class ProcessorFiles:
             
             # Obtener el excedente de registros
             exceeding_count = len(self.records_incomplete) - max_to_keep
+            
+            if final:
+                exceeding_count = len(self.records_incomplete)
+
             if exceeding_count > 0:
                 # Extraer los primeros 'exceeding_count' registros como una lista
                 exceeding_records = list(self.records_incomplete.values())[:exceeding_count]
@@ -520,7 +524,7 @@ class ProcessorFiles:
         return None
 
     def write_dataconfig(self):
-        self.logger.info("VERSION 2.9.d")
+        self.logger.info("VERSION 3.0.a")
         self.logger.info(f"inputPath: {self.inputFile}")
         self.logger.info(f"filePattern: {self.filePattern}")
         self.logger.info(f"IncompleteTransactionsFile: {self.IncompleteTransactionsFile}")
