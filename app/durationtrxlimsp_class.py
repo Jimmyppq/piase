@@ -196,20 +196,18 @@ class ProcessorFiles:
         
 
 
-        ########################################################
-        ##### se documenta para pruebas, eliminar esta documentacion
-        ######################################################## 
+
         # Escribir los datos restantes al final del archivo
         if self.data_line:
             self.process_records()
             self.data_line.clear()
             self.write_result_to_binary()
 
-        if self.records_incomplete :  
+        if self.records_incomplete :
+            if hasattr(self, 'thread_incomplete') and self.thread_incomplete.is_alive():
+                self.thread_incomplete.join()  
             self.write_incomplete_to_binary(True)
-        ########################################################
-        ######################################################## 
-            
+
         self.keep_running = False
         progress_thread.join()
 
@@ -296,13 +294,14 @@ class ProcessorFiles:
             self.thread_complete.join()
         if hasattr(self, 'thread_incomplete') and self.thread_incomplete.is_alive():
             self.thread_incomplete.join()
-
+        
         for transaction_id, records in self.data_line.items(): 
             if transaction_id in self.records_incomplete:
                 result = copy.deepcopy(self.records_incomplete[transaction_id])
                 del self.records_incomplete[transaction_id]  # Elimina el registro de records_incomplete
                 self.count_complete_fromprevious +=1                
                 trx_in = True
+                incomplete_ok = True
             else:
                 result = {
                         'Transaction ID': transaction_id,
@@ -318,7 +317,8 @@ class ProcessorFiles:
                         'Duration': 0,
                         'duration_limsp': 0,
                         'NodeName': records[0]['nodename'],                
-                        'Filename': records[0]['filename']
+                        'Filename': records[0]['filename'],
+                        'm_transaction_id': None
                 }
             
             for record in records:
@@ -334,6 +334,7 @@ class ProcessorFiles:
                 if mtransaction_id is not None :
                     #Si hay un mtransaction el action relacionado es un "MNEWTRANS"
                     result['Transaction ID'] = mtransaction_id
+                    result['m_transaction_id'] = transaction_id 
                     transaction_id = mtransaction_id
                     if not trx_in :
                         # esta condicion asegura que en los valores "min" tengan prioridad 
@@ -377,7 +378,8 @@ class ProcessorFiles:
                         result['date_in_collector'] = timestamp
                         result['Last Action'] = action
                         result['Last Subcomponent'] = subcomponent
-                        flowctrl = True                        
+                        flowctrl = True 
+                        incomplete_ok = True                       
                     continue
             
             #Si la transacción tiene un ciclo completo (entrada y salida) calcular duraciones y añadirlo a una lista para posteriormente escribirlo a disco
@@ -524,7 +526,7 @@ class ProcessorFiles:
         return None
 
     def write_dataconfig(self):
-        self.logger.info("VERSION 3.0.a")
+        self.logger.info("VERSION 3.1.b")
         self.logger.info(f"inputPath: {self.inputFile}")
         self.logger.info(f"filePattern: {self.filePattern}")
         self.logger.info(f"IncompleteTransactionsFile: {self.IncompleteTransactionsFile}")

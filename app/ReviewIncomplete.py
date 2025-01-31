@@ -84,7 +84,7 @@ class ReviewIncomplete:
                 while True:
                     try:
                         transactions = pickle.load(file)
-                        self.logger.debug(f'transacciones cargadas {len(transactions)} - bloque {block}')
+                        self.logger.debug(f'transacciones incompletas cargadas {len(transactions)} - bloque {block}')
                         
                         for transaction in transactions:
                             transaction_id = transaction['Transaction ID']
@@ -101,7 +101,8 @@ class ReviewIncomplete:
                                 'Duration': transaction['Duration'],
                                 'duration_limsp': transaction['duration_limsp'],
                                 'NodeName': transaction['NodeName'],
-                                'Filename': transaction['Filename']
+                                'Filename': transaction['Filename'],
+                                'm_transaction_id': transaction['m_transaction_id']
                             })
                         block +=1
                         self.logger.debug(f'Bloque de lectura: {block}')
@@ -110,10 +111,14 @@ class ReviewIncomplete:
 
                     except EOFError:
                         break
+
+            self.logger.debug('Fin de la lectura del archivo de transacciones incompletas')                
             if self.results :
+                self.logger.debug('Transacciones completas en el último bloque') 
                 thread_complete = threading.Thread(target=self.write_result_to_binary, daemon=True)
                 thread_complete.start()   
             if self.result_incomplete :
+                self.logger.debug('Transacciones incompletas en el último bloque') 
                 thread_incomplete = threading.Thread(target=self.write_result_incomplete_to_binary, daemon=True)
                 thread_incomplete.start()
 
@@ -153,7 +158,8 @@ class ReviewIncomplete:
                 'Duration': records[0]['Duration'],
                 'duration_limsp': records[0]['duration_limsp'],
                 'NodeName': records[0]['NodeName'],                
-                'Filename': records[0]['Filename']
+                'Filename': records[0]['Filename'], 
+                'm_transaction_id': records[0]['m_transaction_id']
                 }
             for record in records:        
                 first_action = record['first_action']
@@ -240,11 +246,11 @@ class ReviewIncomplete:
             self.logger_write.debug('Inicio de escritura Incompletas')
             with open(self.incomplete_transactions_review_file, 'ab') as bin_file:  # 'ab' para agregar datos en formato binario
                 pickle.dump(self.result_incomplete, bin_file)
-            self.logger_write.debug(f"{len(self.result_incomplete)} Transacciones incompletadas {self.incomplete_transactions_review_file}")
+            self.logger_write.debug(f"{len(self.result_incomplete)} Transacciones incompletas {self.incomplete_transactions_review_file}")
             self.count_trx_incomplete += len(self.result_incomplete)
             self.result_incomplete.clear()
         except Exception as e:
-            self.logger_write.error(f"Error al escribir transacciones incompletadas al archivo: {e}")
+            self.logger_write.error(f"Error al escribir transacciones incompletas al archivo: {e}")
 
 
     def log_progress(self):
@@ -260,7 +266,7 @@ class ReviewIncomplete:
             time.sleep(self.timeToLog)  # Esperar x segundos
 
     def write_dataconfig(self):
-        self.logger.info("VERSION 2.0-a")
+        self.logger.info("VERSION 2.0-b")
         self.logger.info(f"IncompleteTransactionsFile: {self.incomplete_transactions_file}")
         self.logger.info(f"CompleteTransactionsFile: {self.CompletedTransactionsFile}")
         self.logger.info(f"IncompleteReviewTransactionsFile: {self.incomplete_transactions_review_file}")        
