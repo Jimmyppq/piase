@@ -7,6 +7,7 @@ shellQA/
 *.sql
 *.pkl
 *.sh
+*.zip
 app/testRendimiento.py
 app/qosprocesslite.py
 app/qosmetrics.py
