@@ -131,7 +131,7 @@ class BinaryTransactionReader:
                         incomplete_transaction['Transaction ID'] = cannocial_trx_id
                         #transaction_id_incomplete = incomplete_transaction.get('m_transaction_id', incomplete_transaction['Transaction ID'])
                                      
-                        self.count_process_complete += 1 
+                        #self.count_process_complete += 1 
                         if cannocial_trx_id  in self.index_incomplete:
                             transaction_incomplete_details = self.index_incomplete[cannocial_trx_id]
                             incomplete_transaction['date_max'] = transaction_incomplete_details['Date Min']
@@ -140,6 +140,8 @@ class BinaryTransactionReader:
                             self.count_actualizadas +=1 
                             self.group_trx_complete_towrite.append(incomplete_transaction)                 
                             continue
+            
+            self.count_process_complete += len(transactions)
                                        
             self.write_binary_send_review() 
             self.logger.debug(f'Procesamiento terminado ({block_process})')
@@ -247,11 +249,11 @@ class BinaryTransactionReader:
             self.logger.warning(f"El archivo del índice {file_name_index} no existe. No se cargará en memoria.")
             return  # Salir del método si el archivo no existe
     
-        self.logger.info(f'Cargando indice {block_number} en memoria: {file_name_index}')
+        self.logger.debug(f'Cargando indice {block_number} en memoria: {file_name_index}')
         try:
             with open(file_name_index, 'rb') as index_file:
                 self.index_incomplete = pickle.load(index_file)            
-            self.logger.info(f"Índice {block_number} cargado en memoria con éxito. {len(self.index_incomplete)}")            
+            self.logger.debug(f"Índice {block_number} cargado en memoria con éxito. {len(self.index_incomplete)}")            
         except Exception as e:
             self.logger.error(f"Error al cargar el índice del archivo binario: {e}")
             sys.exit(1)  # Detener la ejecución si el índice no se puede cargar        
@@ -343,7 +345,7 @@ class BinaryTransactionReader:
             self.logger.debug(f"El archivo CSV {self.resultFinalFile} no existía, no es necesario eliminar")
 
     def write_dataconfig(self):
-        self.logger.info("VERSION 2.0")
+        self.logger.info("VERSION 2.1")
         self.logger.info(f"IncompleteReviewTransactionsFile: {self.incomplete_transactions_file}")
         self.logger.info(f"CompleteTransactionsFile: {self.completed_transactions_file}")
         self.logger.info(f"ReviewTransactionsFile: {self.reviewTransactionsFile}")        

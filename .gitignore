@@ -7,13 +7,13 @@ shellQA/
 *.sql
 *.pkl
 *.sh
+*.md
+*.bin
 *.zip
 app/testRendimiento.py
 app/qosprocesslite.py
 app/qosmetrics.py
 app/qosmetrics_process.py
-configServer/config.ini
-configServer/config.ini
 configServer/config.ini
 app_server/
 qos*
@@ -21,5 +21,4 @@ test*
 app/log-processor.py
 app/ReadFiles.py
 transacciones_descartadas.txt
-/configServer
 log_processIncomplete_writejp_2024-12-24

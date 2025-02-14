@@ -4,10 +4,6 @@ class UnionFind:
         self.rank = {}    # Guarda el "peso" de cada nodo para optimizar unión
 
     def find(self, transaction_id):
-        # Si el identificador no está en la estructura, se retorna tal cual.
-        if transaction_id not in self.parent:
-            return transaction_id
-        # Si no es su propio padre, se aplica la compresión de caminos.
         if self.parent[transaction_id] != transaction_id:
             self.parent[transaction_id] = self.find(self.parent[transaction_id])
         return self.parent[transaction_id]
