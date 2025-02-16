@@ -10,7 +10,7 @@ import copy
 import gc
 import time
 import csv
-
+import fnmatch
 from pathlib import Path
 from collections import defaultdict
 from UnionFind import UnionFind
@@ -154,10 +154,23 @@ class ProcessorFiles:
         return None
 
     def orderbydate(self):
-        # Recorrer todos los archivos en el directorio, incluidos subdirectorios
+        """
+        Ordena los archivos según un orden de patrones configurable y luego por fecha de modificación.
+        """
         files = [file for file in Path(self.inputFile).rglob(self.filePattern) if file.is_file()]        
-        # Ordenar los archivos por la fecha de modificación (de más antigua a más reciente)
-        files_sorted = sorted(files, key=lambda file: file.stat().st_mtime)        
+        
+        # Obtener el orden de los patrones desde la configuración
+        order_patterns = self.config['PROCESS_FILES'].get('file_order_patterns', 'limsp_adaptor*,limmsp_bus_massive*,limsp_bus*,limsp_collector*').split(',')
+        order_patterns = [pattern.strip() for pattern in order_patterns]  # Eliminar espacios en blanco
+
+        def sort_key(file):
+            filename = file.name
+            for i, pattern in enumerate(order_patterns):
+                if fnmatch.fnmatch(filename, pattern):
+                    return (i, file.stat().st_mtime)  # Prioridad por patrón, luego por fecha
+            return (len(order_patterns), file.stat().st_mtime)  # Si no coincide, al final, ordenado por fecha
+
+        files_sorted = sorted(files, key=sort_key)        
         return files_sorted        
 
     def stable_hash(self,transaction_id: str) -> int:
@@ -275,7 +288,7 @@ class ProcessorFiles:
                 self.logger.warning(f'Missing transaction_id in line from file: {file_path}. Details: {detail}')
                 continue
             
-
+            
             self.uf.add_transaction(transaction_id)
             mtransaction_id = detail.get('Mtransaction_id')
             if mtransaction_id is not None:
@@ -289,7 +302,7 @@ class ProcessorFiles:
             self.lines_count += 1
             detail['nodename'] = node_name
             detail['filename'] = file_name
-
+            
             partition_index = self.get_partition(canonical_id, num_partitions)            
             self.partition_buffers[partition_index].append(detail)
 
