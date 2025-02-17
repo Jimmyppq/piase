@@ -19,6 +19,10 @@ from datetime import datetime
 
 
 class ProcessorFiles:
+    # Constantes para los límites de memoria
+    CHUNK_LIMIT = 0.9  # 90% del chunk_size
+    
+
     def __init__(self, config_file):
 
         self.config = self.load_config(config_file)        
@@ -26,7 +30,7 @@ class ProcessorFiles:
         if 'LOGGING' not in self.config:
             raise KeyError("'LOGGING' section not found in the configuration file.")        
         self.setup_logging()    
-        self.lines_count = 0  # Contador para el número de registros en self.data_line
+        self.total_lines = 0  # Contador para el número de registros en self.data_line
         self.pattern = None
         self.valid_actions = set()
         self.valid_subcomponents = set()
@@ -299,7 +303,7 @@ class ProcessorFiles:
             canonical_id = self.uf.find(transaction_id)
             detail['transaction_id'] = canonical_id
 
-            self.lines_count += 1
+            self.total_lines += 1
             detail['nodename'] = node_name
             detail['filename'] = file_name
             
@@ -310,11 +314,11 @@ class ProcessorFiles:
             # Dado que esta validación se hace al final del procesamiento del for (es decir de un archivo completo).
             # Al validar por encima del 80% se puede llegar a tener en memoria una cantidad de líneas superior al 90% e incluso
             # si un archivo fuera lo suficientemente grande un valor cercano o superior al 100%
-            if self.lines_count >= self.chunk_size * 0.9:
-                self.logger.debug(f"Total de líneas alcanzadas {self.lines_count}. Se empiezan a procesar th.id ({threading.get_ident()})")
+            if self.total_lines >= self.chunk_size * self.CHUNK_LIMIT:
+                self.logger.debug(f"Total de líneas alcanzadas {self.total_lines}. Se empiezan a procesar")
                 self.flush_partition_buffers(num_partitions)
                 # Reiniciar el contador global y vaciar buffers de data_line si procede
-                self.lines_count = 0
+                self.total_lines = 0
                 # Dependiendo de la lógica, podrías limpiar también self.data_line o mantener las transacciones incompletas.
         
    
@@ -481,22 +485,22 @@ class ProcessorFiles:
                 'nodename':node_name,
                 'filename':file_name
             })
-            self.lines_count += 1
+            self.total_lines += 1
         
         # Verificar si la cantidad de líneas en memoria es mayor al 90% del tamaño del chunk.
         # Dado que esta validación se hace al final del procesamiento del for (es decir de un archivo completo).
         # Al validar por encima del 80% se puede llegar a tener en memoria una cantidad de líneas superior al 90% e incluso
         # si un archivo fuera lo suficientemente grande un valor cercano o superior al 100%
-        if self.lines_count >= self.chunk_size * 0.9:
-            self.logger.debug(f"Total de líneas alcanzadas.:) {self.lines_count}. Se empiezan a procesar")
+        if self.total_lines >= self.chunk_size * 0.9:
+            self.logger.debug(f"Total de líneas alcanzadas.:) {self.total_lines}. Se empiezan a procesar")
             self.process_records()
             self.data_line.clear()  # Liberar memoria  
-            self.logger.debug(f"Se han terminado de procesar las {self.lines_count} transacciones y se inicia proceso de escritura a binario")        
+            self.logger.debug(f"Se han terminado de procesar las {self.total_lines} transacciones y se inicia proceso de escritura a binario")        
             self.logger.debug(f"Dentro de este bloque se han dado por completadas con ayuda del slicing {self.count_complete_fromprevious}")
             self.logger.debug(f"registros completos {len(self.records_complete)}  - Registros incompletos {len(self.records_incomplete)}") 
      
             self.count_complete_fromprevious = 0
-            self.lines_count = 0  # Reiniciar el contador
+            self.total_lines = 0  # Reiniciar el contador
 
             self.write_in_threads()
                               
