@@ -34,11 +34,8 @@ class ProcessorFiles:
         self.pattern = None
         self.valid_actions = set()
         self.valid_subcomponents = set()
-        self.node_name = str()
-        self.file_name = str()
         self.countFiles = 0 #contador para la cantidad de archivos procesados (para efectos de log y progreso)
         self.totalFiles = 0 #Total de archivos a procesar, principalmente para efectos de log
-        self.count_complete_fromprevious = 0
         self.count_trx_complete = 0
         self.partition_buffers = defaultdict(list)  # buffer que contendrá los registros de cada partición
         self.uf = UnionFind()  # Instancia de Union-Find 
@@ -49,26 +46,7 @@ class ProcessorFiles:
         self.process = False #flag que indica que se ha comenzado a procesar los registros en data_line, 
                              #esto impide que log_process registre log con la cantidad de archivos que sería siempre la misma ya que mientras se está procesando data_line no se leen archivos
 
-        #self.data_line = []
-        #self.data_line = defaultdict(list)
         self.count_incomplete_write = 0 # contador para conocer cuantos registros se han escrito al binario de descartadas  
-        #self.records_complete = [] # Lista para almacenar los resultados finales
-        self.records_incomplete = {} # Diccionario para almacenar las transacciones que aun no son finales pero que podrian tener un estado final en otro bloque de procesamiento.
-        '''self.global_transactions = defaultdict(lambda: {
-            'date_min': None,
-            'date_max': None,
-            'priority': -1,
-            'first_action': None,
-            'last_action': None,
-            'first_subcomponent': None,
-            'last_subcomponent': None,
-            'collector_times': [],
-            'mnewtrans': None,
-            'countSend': 0,
-            'send_times': [],
-            'Duration': None,
-            'duration_limsp': None
-        })'''
         self.keep_running = True # establece cuando detener el hilo que escribe los logs
 
         self.load_configuration_values() 
@@ -113,49 +91,17 @@ class ProcessorFiles:
         self.IncompleteTransactionsFile = self.config['PROCESS_FILES']['IncompleteTransactionsFile']
         self.CompletedTransactionsFile = self.config['PROCESS_FILES']['CompletedTransactionsFile']        
         self.chunk_size = self.config['PROCESS_FILES'].getint('Chunk_size', 1000000)
-        #Se establece como límite de seguridad el 10% del chunk para utilizarlo como registros incompletos
-        # para procesar en siguientes ciclos de "data_line"
-        self.mem_trx_security = self.chunk_size * 0.1
         #self.mem_trx_security = self.config['PROCESS_FILES'].getint('mem_trx_security', 5000000)        
         self.valid_actions = set(self.config['PROCESS_FILES']['valid_actions'].split(','))
         self.valid_subcomponents = set(self.config['PROCESS_FILES']['valid_subcomponents'].split(','))
         # tienmpo en segundos que se ejecutará el hilo que registra actividad en los logs
         self.timeToLog = self.config['PROCESS_FILES'].getint('timeToLog', fallback=120)
         self.resultFinalFile = self.config['PROCESS_FILES']['ResultFinalFile']
+        self.num_partitions = self.config['PROCESS_FILES'].getint('num_partitions', 30)  # 30 como valor por defecto
 
     def compile_regular_expression(self):
         self.pattern = re.compile(r"\[(?P<timestamp>\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}(?:\.\d{3})?)\]\s+(?P<action>.+?)\s+(?P<subcomponent>.+?)\s+(?P<details>.+)")
 
-    def process_log_line(self, line):
-        transaction_pattern = r"(transaction:)([^ ]*)"
-        priority_pattern = r"pri:(\d+)"
-
-        match = self.pattern.match(line)
-
-        if match:
-            details = match.groupdict()
-            action = details['action']
-            subcomponent = details['subcomponent']
-            if action not in self.valid_actions and subcomponent not in self.valid_subcomponents:
-                return None
-
-            transaction_matches = re.finditer(transaction_pattern, details['details'])
-            transaction_ids = [m.group(2) for m in transaction_matches]
-
-            details['transaction_id'] = transaction_ids[0] if transaction_ids else None
-            details['Mtransaction_id'] = transaction_ids[1] if len(transaction_ids) >= 2 else None
-
-            priority_match = re.search(priority_pattern, details['details'])
-            details['priority'] = int(priority_match.group(1)) if priority_match else -1
-
-            if '.' in details['timestamp']:
-                details['timestamp'] = datetime.strptime(details['timestamp'], "%Y/%m/%d %H:%M:%S.%f")
-            else:
-                details['timestamp'] = datetime.strptime(details['timestamp'], "%Y/%m/%d %H:%M:%S")
-
-            return details
-
-        return None
 
     def orderbydate(self):
         """
@@ -196,7 +142,6 @@ class ProcessorFiles:
     def process_log_files(self):   
         
         self.directory_path = Path(self.inputFile)
-        num_partitions = 30
         
         # Verificar si los archivos existen y eliminarlos        
         if os.path.exists(self.IncompleteTransactionsFile):
@@ -234,14 +179,15 @@ class ProcessorFiles:
             self.loggerfiles.debug(f'Nodo: {node_name} -- Archivo ({self.countFiles}): {file_name} -- Path: {path}')   
             try:
                 #self.process_transactions(file_path,node_name,file_name)
-                self.create_partitions(file_path,node_name,file_name, num_partitions)
+                self.create_partitions(file_path,node_name,file_name, self.num_partitions)
             except Exception as e:
                 self.loggerfiles.error(f'Error processing file {file_name}: {e}')
         
         # Escribir los datos restantes al final del archivo
         self.logger.info('Se han procesado todos los archivos. Se escriben los registros restantes...')
         if any(self.partition_buffers.values()):
-            self.flush_partition_buffers(num_partitions)
+            self.flush_partition_buffers(self.num_partitions)
+            
 
         self.logger.info('Se han creado todas las particiones. Se inicia el procesamiento de estas...')
         del self.uf  # Liberar memoria de la estructura Union-Find
@@ -467,163 +413,6 @@ class ProcessorFiles:
 
         return records_complete
     
-    def process_transactions_deprecated(self, file_path,node_name,file_name):
-        
-        for detail in self.log_file_generator(file_path):
-            transaction_id = detail['transaction_id']
-            if transaction_id is None:
-                self.logger.warning(f'Missing transaction_id in line from file: {file_path}. Details: {detail}')
-                continue
-            
-            # Agregar los detalles al defaultdict bajo la clave `transaction_id`
-            self.data_line[transaction_id].append({
-                'timestamp': detail['timestamp'],
-                'action': detail['action'],
-                'subcomponent': detail['subcomponent'],
-                'priority': detail.get('priority', -1),
-                'mtransaction_id': detail.get('Mtransaction_id'),
-                'nodename':node_name,
-                'filename':file_name
-            })
-            self.total_lines += 1
-        
-        # Verificar si la cantidad de líneas en memoria es mayor al 90% del tamaño del chunk.
-        # Dado que esta validación se hace al final del procesamiento del for (es decir de un archivo completo).
-        # Al validar por encima del 80% se puede llegar a tener en memoria una cantidad de líneas superior al 90% e incluso
-        # si un archivo fuera lo suficientemente grande un valor cercano o superior al 100%
-        if self.total_lines >= self.chunk_size * 0.9:
-            self.logger.debug(f"Total de líneas alcanzadas.:) {self.total_lines}. Se empiezan a procesar")
-            self.process_records()
-            self.data_line.clear()  # Liberar memoria  
-            self.logger.debug(f"Se han terminado de procesar las {self.total_lines} transacciones y se inicia proceso de escritura a binario")        
-            self.logger.debug(f"Dentro de este bloque se han dado por completadas con ayuda del slicing {self.count_complete_fromprevious}")
-            self.logger.debug(f"registros completos {len(self.records_complete)}  - Registros incompletos {len(self.records_incomplete)}") 
-     
-            self.count_complete_fromprevious = 0
-            self.total_lines = 0  # Reiniciar el contador
-
-            self.write_in_threads()
-                              
-    def process_records_deprecated (self):
-        records_multisend = {}
-        flowctrl = False
-        trx_in = False #indica si la transacción tiene un rastro de entrada (NEWTRANS O MNEWTRANS)
-        trx_out = False #indica si la transacción tiene un rastro de salida (SEND)
-        incomplete_ok = False
-        self.process = True #Indica que se ha comenzado a procesar, este flag se utiliza para que el thread de escritura en logs no escriba mientras se está procesando
-
-        if hasattr(self, 'thread_complete') and self.thread_complete.is_alive():
-            self.thread_complete.join()
-        if hasattr(self, 'thread_incomplete') and self.thread_incomplete.is_alive():
-            self.thread_incomplete.join()
-        
-        for transaction_id, records in self.data_line.items(): 
-            if transaction_id in self.records_incomplete:
-                result = copy.deepcopy(self.records_incomplete[transaction_id])
-                del self.records_incomplete[transaction_id]  # Elimina el registro de records_incomplete
-                self.count_complete_fromprevious +=1                
-                trx_in = True
-                incomplete_ok = True
-            else:
-                result = {
-                        'Transaction ID': transaction_id,
-                        'Date Min': records[0]['timestamp'],
-                        'date_max': records[0]['timestamp'],
-                        'Priority': records[0]['priority'],
-                        'first_action': records[0]['action'],
-                        'first_subcomponent': records[0]['subcomponent'], 
-                        'Last Action': records[0]['action'],
-                        'Last Subcomponent': records[0]['subcomponent'],
-                        'countSend': 0,
-                        'date_in_collector': records[0]['timestamp'],
-                        'Duration': 0,
-                        'duration_limsp': 0,
-                        'NodeName': records[0]['nodename'],                
-                        'Filename': records[0]['filename'],
-                        'm_transaction_id': None
-                }
-            
-            for record in records:
-                timestamp = record['timestamp']
-                action = record['action']
-                subcomponent = record['subcomponent']
-                priority = record.get('priority', -1)
-                mtransaction_id = record.get('mtransaction_id')
-
-                if priority != -1:
-                    result['Priority'] = priority
-
-                if mtransaction_id is not None :
-                    #Si hay un mtransaction el action relacionado es un "MNEWTRANS"
-                    result['Transaction ID'] = mtransaction_id
-                    result['m_transaction_id'] = transaction_id 
-                    transaction_id = mtransaction_id
-                    if not trx_in :
-                        # esta condicion asegura que en los valores "min" tengan prioridad 
-                        # los NEWTRANS, y solo se ponga el valor de MNEWTRANS cuando no haya un NEWTRANS 
-                        result['Date Min'] = timestamp
-                        result['first_action'] = action
-                        result['first_subcomponent'] = subcomponent
-                        incomplete_ok = True
-                        trx_in = True
-                    continue
-                
-                if action == 'NEWTRANS':
-                    result['Date Min'] = timestamp
-                    result['first_action'] = action
-                    result['first_subcomponent'] = subcomponent
-                    incomplete_ok = True
-                    trx_in = True
-                    continue
-                      
-                if action == 'SEND':
-                    records_multisend[transaction_id] = [] 
-                    if result['countSend'] == 0:                       
-                        result['date_max'] = timestamp
-                        result['Last Action'] = action
-                        result['Last Subcomponent'] = subcomponent
-                        result['countSend'] += 1
-                        trx_out = True
-                        incomplete_ok = True                                                             
-                    else:
-                        result['countSend'] +=1
-                        records_multisend[transaction_id].append({
-                            'Transaction ID': transaction_id,
-                            'date_max': timestamp,
-                            'Last Action': action,
-                            'Last Subcomponent': subcomponent,
-                        })
-                        
-                    continue
-                if not flowctrl:
-                    if action == 'OUT' and subcomponent == 'FailOverManager' :
-                        result['date_in_collector'] = timestamp
-                        result['Last Action'] = action
-                        result['Last Subcomponent'] = subcomponent
-                        flowctrl = True 
-                        incomplete_ok = True                       
-                    continue
-            
-            #Si la transacción tiene un ciclo completo (entrada y salida) calcular duraciones y añadirlo a una lista para posteriormente escribirlo a disco
-            if trx_in and trx_out :
-                result['Duration'] = (result['date_max'] - result['Date Min']).total_seconds()
-                if flowctrl :
-                    result['duration_limsp'] = (result['date_in_collector'] - result['Date Min']).total_seconds()
-                self.records_complete.append(copy.deepcopy(result))                
-            elif incomplete_ok : 
-                #Si la transacción no tiene un ciclo completo, pero tiene un NEWTRANS o un SEND se añade a la ventana, de lo contrario no se contempla
-                self.records_incomplete[transaction_id] = copy.deepcopy(result)
-                #self.records_incomplete.append(copy.deepcopy(result))              
-                
-                
-            result.clear()
-            flowctrl = False 
-            incomplete_ok = False
-            trx_out = False
-            trx_in = False
-
-        self.process = False
-   
     def write_in_threads(self, processed_data):         
         self.thread_complete = threading.Thread(target=self.write_result_to_csv, args=(processed_data,),daemon=True)
         #self.thread_incomplete = threading.Thread(target=self.write_incomplete_to_binary, daemon=True)
@@ -631,67 +420,6 @@ class ProcessorFiles:
         # Iniciar los hilos
         self.thread_complete.start()
         #self.thread_incomplete.start()
-
-    def write_incomplete_to_binary_deprecated(self,final=False):
-        try:
-            if not self.records_incomplete:  # Verifica si self.records_incomplete está vacío
-                self.logger.debug('No hay transacciones incompletas para escribir.')
-                return
-            
-            self.logger.debug(f"Se inicia escritura de transacciones incompletas al archivo binario")
-            # Calcular el número máximo de registros a conservar
-            max_to_keep = int(self.chunk_size * 0.1)
-            
-            # Obtener el excedente de registros
-            exceeding_count = len(self.records_incomplete) - max_to_keep
-            
-            if final:
-                exceeding_count = len(self.records_incomplete)
-
-            if exceeding_count > 0:
-                # Extraer los primeros 'exceeding_count' registros como una lista
-                exceeding_records = list(self.records_incomplete.values())[:exceeding_count]
-                
-                # Actualizar 'self.records_incomplet' para conservar solo los últimos `max_to_keep` registros
-                self.records_incomplete = {
-                    k: v for i, (k, v) in enumerate(self.records_incomplete.items())
-                    if i >= exceeding_count
-                }
-                
-                # Escribir los registros excedentes en el archivo binario
-                with open(self.IncompleteTransactionsFile, 'ab') as bin_file:
-                    pickle.dump(exceeding_records, bin_file)
-                
-                self.logger.info(f"{len(exceeding_records)} transacciones incompletas escritas en el archivo binario {self.IncompleteTransactionsFile}")
-                self.logger.info(f"Se mantienen {len(self.records_incomplete)} trx incompletas ")
-                self.count_incomplete_write += len(exceeding_records)
-                exceeding_records.clear()
-            else:
-                self.logger.info("No hay registros excedentes para escribir en el archivo binario.")
-        except Exception as e:
-            self.logger.error(f"Error al escribir las transacciones incompletas al archivo binario: {e}")
-        finally:
-            gc.collect()
-            # se fuerza la invocación del GC de Python ya que dentro de write_incomplete_to_binary se libera  
-            # memoria del diccionario records_incomplete, básicamente son los registros que se escriben al archivo binario los que se eliminan
-
-    def write_result_to_binary_deprecated(self,records_complete):
-        
-        try:
-            if not records_complete:  # Verifica si self.records_complete está vacío
-                self.logger.debug('No hay transacciones completas para escribir.')
-                return
-            
-            self.logger.debug(f"Se inicia escritura de transacciones completas al archivo binario")
-            with self.lock:  # Bloquea el recurso compartido
-                with open(self.CompletedTransactionsFile, 'ab') as bin_file:  # 'ab' para agregar datos en formato binario
-                    pickle.dump(records_complete, bin_file)
-                self.logger.info(f"{len(records_complete)} Transacciones completadas {self.CompletedTransactionsFile}")
-                self.count_trx_complete += len(records_complete)
-
-        except Exception as e:
-            self.logger.error(f"Error al escribir transacciones completadas al archivo: {e}")
-
 
     def write_result_to_csv(self, records_complete):
         try:
@@ -741,7 +469,7 @@ class ProcessorFiles:
         priority_pattern = r"pri:(\d+)"
         match = self.pattern.match(line)
 
-        if match:
+        if (match):
             details = match.groupdict()
             action = details['action']
             subcomponent = details['subcomponent']
@@ -792,18 +520,17 @@ class ProcessorFiles:
         return None
 
     def write_dataconfig(self):
-        self.logger.info("VERSION 4.4")
+        self.logger.info("VERSION 4.6")
         self.logger.info(f"inputPath: {self.inputFile}")
         self.logger.info(f"filePattern: {self.filePattern}")
         self.logger.info(f"IncompleteTransactionsFile: {self.IncompleteTransactionsFile}")
         self.logger.info(f"CompleteTransactionsFile: {self.CompletedTransactionsFile}")
         self.logger.info(f"chunk_size: {self.chunk_size}") 
         self.logger.info(f"timeToLog: {self.timeToLog}")
+        self.logger.info(f"num_partitions: {self.num_partitions}")
       
 if __name__ == "__main__":
-    
-    num_partitions = 30  # O el valor que estés utilizando
-    processed_data =[] # Lista para almacenar los resultados finales
+    processed_data = []  # Lista para almacenar los resultados finales
 
     try:
         manager = ProcessorFiles('./config/config.ini')        
@@ -813,7 +540,7 @@ if __name__ == "__main__":
         manager.write_dataconfig()
         manager.process_log_files()
             
-        partition_file_names = manager.get_partition_file_names(num_partitions)
+        partition_file_names = manager.get_partition_file_names(manager.num_partitions)
         for partition_file in partition_file_names:
             data_line = manager.process_partition_file(partition_file)
             processed_data = manager.process_transactions(data_line, partition_file)
