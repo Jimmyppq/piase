@@ -40,6 +40,7 @@ class ProcessorFiles:
         self.partition_buffers = defaultdict(list)  # buffer que contendrá los registros de cada partición
         self.uf = UnionFind()  # Instancia de Union-Find 
         self.csv_initialized = False  # Bandera para encabezado de CSV
+        self.first_fo_records = {}  # Diccionario para almacenar registros de FailOver iniciales
 
  
                 
@@ -88,15 +89,16 @@ class ProcessorFiles:
        
         self.inputFile = self.config['PROCESS_FILES']['InputPath']        
         self.filePattern = self.config['PROCESS_FILES'].get('FilePattern', '*act*.log')
-        self.IncompleteTransactionsFile = self.config['PROCESS_FILES']['IncompleteTransactionsFile']
-        self.CompletedTransactionsFile = self.config['PROCESS_FILES']['CompletedTransactionsFile']        
+        self.IncompleteTransactionsFile = self.config['PROCESS_FILES']['tmpdatabinary']
+        #self.CompletedTransactionsFile = self.config['PROCESS_FILES']['CompletedTransactionsFile']        
         self.chunk_size = self.config['PROCESS_FILES'].getint('Chunk_size', 1000000)
-        #self.mem_trx_security = self.config['PROCESS_FILES'].getint('mem_trx_security', 5000000)        
+        self.mem_trx_security = self.config['PROCESS_FILES'].getint('mem_trx_security', 2000000)        
         self.valid_actions = set(self.config['PROCESS_FILES']['valid_actions'].split(','))
         self.valid_subcomponents = set(self.config['PROCESS_FILES']['valid_subcomponents'].split(','))
         # tienmpo en segundos que se ejecutará el hilo que registra actividad en los logs
         self.timeToLog = self.config['PROCESS_FILES'].getint('timeToLog', fallback=120)
         self.resultFinalFile = self.config['PROCESS_FILES']['ResultFinalFile']
+        self.order_patterns = self.config['PROCESS_FILES'].get('file_order_patterns', 'limsp_adaptor*,limmsp_bus_massive*,limsp_bus*,limsp_collector*').split(',')
         self.num_partitions = self.config['PROCESS_FILES'].getint('num_partitions', 30)  # 30 como valor por defecto
 
     def compile_regular_expression(self):
@@ -110,8 +112,8 @@ class ProcessorFiles:
         files = [file for file in Path(self.inputFile).rglob(self.filePattern) if file.is_file()]        
         
         # Obtener el orden de los patrones desde la configuración
-        order_patterns = self.config['PROCESS_FILES'].get('file_order_patterns', 'limsp_adaptor*,limmsp_bus_massive*,limsp_bus*,limsp_collector*').split(',')
-        order_patterns = [pattern.strip() for pattern in order_patterns]  # Eliminar espacios en blanco
+        
+        order_patterns = [pattern.strip() for pattern in self.order_patterns]  # Eliminar espacios en blanco
 
         def sort_key(file):
             filename = file.name
@@ -147,10 +149,7 @@ class ProcessorFiles:
         if os.path.exists(self.IncompleteTransactionsFile):
             os.remove(self.IncompleteTransactionsFile)
             self.logger.warning(f'Archivo {self.IncompleteTransactionsFile} existe previamente. Se elimina antes de iniciar')        
-        if os.path.exists(self.CompletedTransactionsFile):
-            os.remove(self.CompletedTransactionsFile)
-            self.logger.warning(f'Archivo {self.CompletedTransactionsFile} existe previamente. Se elimina antes de iniciar') 
-        
+                
         matching_files = list(self.directory_path.rglob(self.filePattern)) 
         self.totalFiles = len(matching_files)
 
@@ -184,6 +183,9 @@ class ProcessorFiles:
                 self.loggerfiles.error(f'Error processing file {file_name}: {e}')
         
         # Escribir los datos restantes al final del archivo
+        if self.first_fo_records:
+            self.logger.info(f"{len(self.first_fo_records)} registros de FailOver quedaron sin relacionar")
+
         self.logger.info('Se han procesado todos los archivos. Se escriben los registros restantes...')
         if any(self.partition_buffers.values()):
             self.flush_partition_buffers(self.num_partitions)
@@ -192,6 +194,7 @@ class ProcessorFiles:
         self.logger.info('Se han creado todas las particiones. Se inicia el procesamiento de estas...')
         del self.uf  # Liberar memoria de la estructura Union-Find
         del self.partition_buffers  # Liberar memoria de los buffers de particiones
+        del self.first_fo_records  # Liberar memoria de la lista de registros de FailOver
         gc.collect()  # Forzar la recolección de basura
 
         self.keep_running = False
@@ -203,7 +206,8 @@ class ProcessorFiles:
                 parcial_time = time.time()
                 total_time = parcial_time - self.start_time
                 progressFiles = (self.countFiles/self.totalFiles)*100
-                self.logger.info(f"Total de archivos procesados {self.countFiles}, progreso {progressFiles:.2f}%")
+                total_fo_records = len(self.first_fo_records)
+                self.logger.info(f"Total de archivos procesados {self.countFiles}, progreso {progressFiles:.2f}%. {total_fo_records} registros de FailOver sin relacionar")
                 if total_time > 3600 :
                     logging.info(f"Tiempo transcurrido: {total_time / 3600:.2f} horas.")
                 else:
@@ -231,30 +235,70 @@ class ProcessorFiles:
         
         if not hasattr(self, 'partition_buffers'):
             self.partition_buffers = {i: [] for i in range(num_partitions)}
+        
+        detail_fo = []
+        detail_fo_check = False
 
         for detail in self.log_file_generator(file_path):
             transaction_id = detail['transaction_id']
             if transaction_id is None:
                 self.logger.warning(f'Missing transaction_id in line from file: {file_path}. Details: {detail}')
                 continue
-            
-            
+            action = detail['action']
+            subcomponent = detail['subcomponent']
+
             self.uf.add_transaction(transaction_id)
             mtransaction_id = detail.get('Mtransaction_id')
+            #Si el registro obedece a una transacción desdoblada, se unen las transacciones manteniedo la jerarquía
             if mtransaction_id is not None:
+                tmp_trx,size = self.uf.find(mtransaction_id)
+                '''if tmp_trx == 'UNBvAED6g4vQpQ0cEVgyDXVc' :
+                    print("debug")'''
+                '''if size == 1:
+                    detail_fo = self.first_fo_records.pop(mtransaction_id)                    
+                    detail_fo['nodename'] = node_name
+                    detail_fo['filename'] = file_name 
+                    detail_fo_check = True'''                   
+                    
+                if tmp_trx is None:            
+                    trx_padre = mtransaction_id
+                    trx_hijo = transaction_id
+                else:
+                    trx_padre = transaction_id
+                    trx_hijo = mtransaction_id
                 self.uf.add_transaction(mtransaction_id)
-                self.uf.union(transaction_id, mtransaction_id)
+                self.uf.union(trx_padre,trx_hijo)
             
             #canonical transaction id
-            canonical_id = self.uf.find(transaction_id)
+            canonical_id,size = self.uf.find(transaction_id)
+            
+            '''if canonical_id == 'UNBvAED6g4vQpQ0cEVgyDXVc' or canonical_id == 'UNBvAECZzKESsg0cEVjsa57P':
+                print(f"transaction_id: {transaction_id} canonical_id: {canonical_id} size: {size}. filename: {node_name}:/{file_name}. ({len(self.first_fo_records)})")'''
+            if action == 'OUT' and subcomponent == 'FailOverManager' and size == 1:
+                '''Esto indica que el FailOver es el primer registro de la transacción, por lo tanto no se
+                calculará aún el hash y se almacenará en el diccionario global usando canonical_id como clave
+                '''
+                self.first_fo_records[canonical_id] = detail  # Usamos canonical_id como clave
+                continue
+            '''elif action == 'MNEWTRANS' and len(self.first_fo_records) >= self.mem_trx_security:                
+                self.logger.debug(f"Procesando FailOver huerfanos ({len(self.first_fo_records)} registros)")
+                self.process_fo_records(num_partitions)  # Pasar num_partitions como parámetro
+                self.logger.debug(f"Registros restantes en first_fo_records: {len(self.first_fo_records)}")
+                continue'''
+                
+            
             detail['transaction_id'] = canonical_id
-
             self.total_lines += 1
             detail['nodename'] = node_name
             detail['filename'] = file_name
-            
-            partition_index = self.get_partition(canonical_id, num_partitions)            
+            partition_index = self.get_partition(canonical_id, num_partitions)
+            if detail_fo_check:
+                detail_fo['transaction_id'] = canonical_id           
+                self.partition_buffers[partition_index].append(detail_fo)
+                self.total_lines += 1          
             self.partition_buffers[partition_index].append(detail)
+
+            detail_fo_check=False
 
             # Verificar si la cantidad de líneas en memoria es mayor al 90% del tamaño del chunk.
             # Dado que esta validación se hace al final del procesamiento del for (es decir de un archivo completo).
@@ -266,6 +310,7 @@ class ProcessorFiles:
                 # Reiniciar el contador global y vaciar buffers de data_line si procede
                 self.total_lines = 0
                 # Dependiendo de la lógica, podrías limpiar también self.data_line o mantener las transacciones incompletas.
+            
         
    
                
@@ -520,14 +565,43 @@ class ProcessorFiles:
         return None
 
     def write_dataconfig(self):
-        self.logger.info("VERSION 4.6")
+        self.logger.info("VERSION 5.4-a")
         self.logger.info(f"inputPath: {self.inputFile}")
         self.logger.info(f"filePattern: {self.filePattern}")
-        self.logger.info(f"IncompleteTransactionsFile: {self.IncompleteTransactionsFile}")
-        self.logger.info(f"CompleteTransactionsFile: {self.CompletedTransactionsFile}")
+        self.logger.info(f"tmpdatabinary: {self.IncompleteTransactionsFile}")
+        self.logger.info(f"mem_trx_security: {self.mem_trx_security}")
         self.logger.info(f"chunk_size: {self.chunk_size}") 
         self.logger.info(f"timeToLog: {self.timeToLog}")
         self.logger.info(f"num_partitions: {self.num_partitions}")
+        self.logger.info(f"fileOrderPatterns: {self.order_patterns}")
+      
+    def process_fo_records_deprecated(self, num_partitions: int):
+        """
+        Procesa los registros en first_fo_records y elimina aquellos que ya no están solos.
+        Args:
+            num_partitions (int): Número de particiones para distribuir los registros
+        """
+        i = 0
+        while i < len(self.first_fo_records):
+            record = self.first_fo_records[i]
+            transaction_id = record['transaction_id']            
+            _, size = self.uf.find(transaction_id)
+
+            '''if transaction_id == 'UNBvAED6g4vQpQ0cEVgyDXVc' or transaction_id == 'UNBvAECZzKESsg0cEVjsa57P':
+                print(f'trxid {transaction_id}: size({size})')'''
+
+            if size > 1:  # Si ya no está solo (tiene otros registros asociados)
+                canonical_id, _ = self.uf.find(transaction_id)
+                record['transaction_id'] = canonical_id
+                
+                partition_index = self.get_partition(canonical_id, num_partitions)
+                self.partition_buffers[partition_index].append(record)
+                self.total_lines += 1
+                
+                # Eliminar el registro de first_fo_records
+                self.first_fo_records.pop(i)
+            else:
+                i += 1
       
 if __name__ == "__main__":
     processed_data = []  # Lista para almacenar los resultados finales
