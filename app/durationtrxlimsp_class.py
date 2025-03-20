@@ -465,9 +465,9 @@ class ProcessorFiles:
                     trx_in = True
                     continue
                       
-                if action == 'SEND':
-                    records_multisend[transaction_id] = [] 
-                    if result['countSend'] == 0:                       
+                if action == 'SEND':                    
+                    if result['countSend'] == 0:    
+                        records_multisend[transaction_id] = []                    
                         result['date_max'] = timestamp
                         result['Last Action'] = action
                         result['Last Subcomponent'] = subcomponent
@@ -702,7 +702,7 @@ class ProcessorFiles:
             return None
 
     def write_dataconfig(self):
-        self.logger.info("VERSION 6.4")
+        self.logger.info("VERSION 6.5")
         self.logger.info(f"inputPath: {self.inputFile}")
         self.logger.info(f"filePattern: {self.filePattern}")
         self.logger.info(f"ResultFinalFile: {self.resultFinalFile}")
