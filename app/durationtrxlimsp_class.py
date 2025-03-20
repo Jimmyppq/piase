@@ -89,7 +89,7 @@ class ProcessorFiles:
         self.inputFile = self.config['PROCESS_FILES']['InputPath']        
         self.filePattern = self.config['PROCESS_FILES'].get('FilePattern', '*act*.log')
         self.IncompleteTransactionsFile = self.config['PROCESS_FILES']['IncompleteTransactionsFile']
-        self.CompletedTransactionsFile = self.config['PROCESS_FILES']['CompletedTransactionsFile']        
+                
         self.chunk_size = self.config['PROCESS_FILES'].getint('Chunk_size', 1000000)
         #self.mem_trx_security = self.config['PROCESS_FILES'].getint('mem_trx_security', 5000000)        
         self.valid_actions = set(self.config['PROCESS_FILES']['valid_actions'].split(','))
@@ -100,9 +100,24 @@ class ProcessorFiles:
         self.order_patterns = self.config['PROCESS_FILES'].get('file_order_patterns', 'limsp_adaptor*,limmsp_bus_massive*,limsp_bus*,limsp_collector*').split(',')
         self.num_partitions = self.config['PROCESS_FILES'].getint('num_partitions', 30)  # 30 como valor por defecto
 
-    def compile_regular_expression(self):
-        self.pattern = re.compile(r"\[(?P<timestamp>\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}(?:\.\d{3})?)\]\s+(?P<action>.+?)\s+(?P<subcomponent>.+?)\s+(?P<details>.+)")
+        # Cargar el patrón desde la configuración
+        pattern = self.config['PROCESS_FILES'].get('log_pattern')
+        if pattern:
+            # Si existe en config, eliminar comillas dobles y procesar escapes
+            pattern = pattern.strip('"')
+            # Convertir los dobles backslashes en singles
+            pattern = pattern.replace('\\\\', '\\')
+        
+        # Usar el patrón procesado o el valor por defecto
+        self.log_pattern_str = pattern or r'\[(?P<timestamp>\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}(?:\.\d{3})?)\]\s+(?P<action>.+?)\s+(?P<subcomponent>.+?)\s+(?P<details>.+)'
 
+    def compile_regular_expression(self):
+        try:
+            self.pattern = re.compile(self.log_pattern_str)
+            self.logger.debug(f"Expresión regular compilada: {self.log_pattern_str}")
+        except re.error as e:
+            self.logger.error(f"Error compilando expresión regular: {str(e)}")
+            raise
 
     def orderbydate(self):
         """
@@ -157,7 +172,7 @@ class ProcessorFiles:
         
         self.logger.info(f'Archivos encontrados: {self.totalFiles}...')
         filesbydate = self.orderbydate()
-        self.loggerfiles.info("Ordenado archivos por fecha de modificación:..")
+        self.loggerfiles.info("Ordenado archivos:..")
         if self.logger.isEnabledFor(logging.DEBUG):
             for i, file_path in enumerate(filesbydate):
                 self.loggerfiles.debug(f"{i+1}: {file_path}")
@@ -223,7 +238,7 @@ class ProcessorFiles:
                 if total_time > 3600 :
                     logging.info(f"Tiempo transcurrido: {total_time / 3600:.2f} horas.")
                 else:
-                    logging.info(f"Tiempo transcurrido1: {total_time / 60:.2f} minutos.")
+                    logging.info(f"Tiempo transcurrido: {total_time / 60:.2f} minutos.")
             time.sleep(self.timeToLog)  # Esperar x segundos                               
 
     def flush_partition_buffers(self, num_partitions):
@@ -329,26 +344,50 @@ class ProcessorFiles:
    
                
     def process_partition_file(self, partition_file_path):
-
-        data_line = defaultdict(list)  # Almacena registros agrupados por transaction_id
+        """
+        Procesa un archivo de partición y retorna los registros agrupados por transaction_id.
+        
+        Args:
+            partition_file_path (str): Ruta al archivo de partición
+        
+        Returns:
+            defaultdict: Diccionario con registros agrupados por transaction_id
+            None: Si el archivo no existe o hay error en la lectura
+        """
+        data_line = defaultdict(list)
         total_records = 0
-        self.logger.debug(f"Leyendo la partición: {partition_file_path}")
-        
-        with open(partition_file_path, 'rb') as f:
-            while True:
-                try:
-                    chunk = pickle.load(f)  # Carga un bloque
-                    # Procesa cada registro del chunk directamente, sin acumular en "records"
-                    for record in chunk:
-                        transaction_id = record.get('transaction_id')
-                        data_line[transaction_id].append(record)
-                        total_records += 1
-                    del chunk  # Libera memoria del chunk procesado
-                except EOFError:
-                    break
-        
-        self.logger.debug(f"Registros leídos: {total_records}")
-        return data_line
+
+        if not os.path.exists(partition_file_path):
+            self.logger.warning(f"La partición no existe: {partition_file_path}")
+            return data_line
+
+        try:
+            self.logger.debug(f"Leyendo la partición: {partition_file_path}")
+            with open(partition_file_path, 'rb') as f:
+                while True:
+                    try:
+                        chunk = pickle.load(f)
+                        for record in chunk:
+                            transaction_id = record.get('transaction_id')
+                            if transaction_id:  # Validación adicional
+                                data_line[transaction_id].append(record)
+                                total_records += 1
+                        del chunk  # Libera memoria
+                    except EOFError:
+                        break
+                    except pickle.UnpicklingError as e:
+                        self.logger.error(f"Error al deserializar datos en {partition_file_path}: {str(e)}")
+                        break
+
+            self.logger.debug(f"Registros leídos: {total_records}")
+            return data_line
+
+        except IOError as e:
+            self.logger.error(f"Error de I/O al leer {partition_file_path}: {str(e)}")
+            return data_line
+        except Exception as e:
+            self.logger.error(f"Error inesperado procesando {partition_file_path}: {str(e)}")
+            return data_line
     
     def get_partition_file_names(self, num_partitions: int) -> list:
         """
@@ -394,6 +433,8 @@ class ProcessorFiles:
                 action = record['action']
                 subcomponent = record['subcomponent']
                 priority = record.get('priority', -1)
+                node_name = record.get('nodename')
+                file_name = record.get('filename')
                 #mtransaction_id = record.get('mtransaction_id')
                 
                 if priority != -1:
@@ -418,6 +459,8 @@ class ProcessorFiles:
                     result['Date Min'] = timestamp
                     result['first_action'] = action
                     result['first_subcomponent'] = subcomponent
+                    result['NodeName']= node_name
+                    result['Filename'] = file_name                  
                     incomplete_ok = True
                     trx_in = True
                     continue
@@ -443,9 +486,7 @@ class ProcessorFiles:
 
                 if not flowctrl:
                     if action == 'OUT' and subcomponent == 'FailOverManager' :
-                        result['date_in_collector'] = timestamp
-                        result['Last Action'] = action
-                        result['Last Subcomponent'] = subcomponent
+                        result['date_in_collector'] = timestamp                        
                         flowctrl = True 
                         incomplete_ok = True                       
                     continue
@@ -455,8 +496,8 @@ class ProcessorFiles:
                 result['Duration'] = (result['date_max'] - result['Date Min']).total_seconds()
                 if flowctrl :
                     result['duration_limsp'] = (result['date_in_collector'] - result['Date Min']).total_seconds()
-                result['NodeName'] = records[0]['nodename']
-                result['Filename'] = records[0]['filename']              
+                #result['NodeName'] = records[0]['nodename']
+                #result['Filename'] = records[0]['filename']              
                 records_complete.append(result.copy())                           
             '''elif incomplete_ok : 
                 #Si la transacción no tiene un ciclo completo, pero tiene un NEWTRANS o un SEND se añade a la ventana, de lo contrario no se contempla
@@ -470,15 +511,43 @@ class ProcessorFiles:
             trx_out = False
             trx_in = False
 
-        return records_complete
+        return records_complete, records_multisend
     
-    def write_in_threads(self, processed_data):         
-        self.thread_complete = threading.Thread(target=self.write_result_to_csv, args=(processed_data,),daemon=True)
-        #self.thread_incomplete = threading.Thread(target=self.write_incomplete_to_binary, daemon=True)
+    def write_in_threads(self, processed_data, records_multisend):
+        """
+        Inicia hilos para escribir datos procesados y registros multisend.
+        La validación de processed_data se hace antes de llamar a este método.
+        
+        Args:
+            processed_data (list): Lista de transacciones procesadas
+            records_multisend (dict): Diccionario de registros multisend
+        """
+        threads = []
+        
+        # Crear hilo para datos procesados (sin validación)
+        thread_complete = threading.Thread(
+            target=self.write_result_to_csv,
+            args=(processed_data,),
+            daemon=True
+        )
+        threads.append(thread_complete)
 
-        # Iniciar los hilos
-        self.thread_complete.start()
-        #self.thread_incomplete.start()
+        # Crear hilo para multisend solo si hay datos
+        if records_multisend:
+            thread_multisend = threading.Thread(
+                target=self.write_multisend_to_csv,
+                args=(records_multisend,),
+                daemon=True
+            )
+            threads.append(thread_multisend)
+
+        # Iniciar todos los hilos
+        for thread in threads:
+            thread.start()
+
+        # Esperar a que todos los hilos terminen
+        for thread in threads:
+            thread.join()
 
     def write_result_to_csv(self, records_complete):
         try:
@@ -511,6 +580,42 @@ class ProcessorFiles:
 
         except Exception as e:
             self.logger.error(f"Error al escribir CSV: {e}")
+
+    def write_multisend_to_csv(self, records_multisend):
+        """
+        Escribe los registros de multisend en un archivo CSV separado.
+        
+        Args:
+            records_multisend (dict): Diccionario con registros de envíos múltiples
+        """
+        try:
+            if not records_multisend:
+                self.logger.debug('No hay transacciones multisend para escribir.')
+                return
+                
+            multisend_file = self.resultFinalFile.replace('.csv', '_multisend.csv')
+            self.logger.debug(f"Se inicia escritura de transacciones multisend. Total IDs: {len(records_multisend)}")
+            
+            with self.csv_lock:  # Usar el mismo lock para evitar conflictos
+                with open(multisend_file, 'a', newline='', encoding='utf-8') as csv_file:
+                    writer = csv.DictWriter(csv_file, fieldnames=[
+                        'Transaction ID', 'date_max', 'Last Action', 
+                        'Last Subcomponent'
+                    ])
+
+                    # Escribir encabezado si el archivo está vacío
+                    if csv_file.tell() == 0:
+                        writer.writeheader()
+
+                    # Escribir todos los registros multisend
+                    for transaction_id, sends in records_multisend.items():
+                        if sends:  # Verificar que haya envíos adicionales
+                            writer.writerows(sends)
+
+            self.logger.info(f"Registros multisend escritos para {len(records_multisend)} transacciones")
+
+        except Exception as e:
+            self.logger.error(f"Error escribiendo registros multisend: {str(e)}")
 
     def log_file_generator(self, file_path):
         try:
@@ -597,14 +702,19 @@ class ProcessorFiles:
             return None
 
     def write_dataconfig(self):
-        self.logger.info("VERSION 6.0")
+        self.logger.info("VERSION 6.4")
         self.logger.info(f"inputPath: {self.inputFile}")
         self.logger.info(f"filePattern: {self.filePattern}")
-        self.logger.info(f"IncompleteTransactionsFile: {self.IncompleteTransactionsFile}")
-        self.logger.info(f"CompleteTransactionsFile: {self.CompletedTransactionsFile}")
+        self.logger.info(f"ResultFinalFile: {self.resultFinalFile}")
+        self.logger.info(f"Binarios: {self.IncompleteTransactionsFile}")        
         self.logger.info(f"chunk_size: {self.chunk_size}") 
         self.logger.info(f"timeToLog: {self.timeToLog}")
         self.logger.info(f"num_partitions: {self.num_partitions}")
+        self.logger.info(f"valid_actions: {self.valid_actions}") 
+        self.logger.info(f"valid_subcomponents: {self.valid_subcomponents}")
+        self.logger.info(f"file_order_patterns: {self.order_patterns}")
+        self.logger.info(f"log_pattern: {self.log_pattern_str}") 
+        
 
     '''def monitor_resources(self):
         import psutil
@@ -619,6 +729,7 @@ class ProcessorFiles:
       
 if __name__ == "__main__":
     processed_data = []  # Lista para almacenar los resultados finales
+    records_multisend = {}  # Diccionario para almacenar los registros de multisend
 
     try:
         manager = ProcessorFiles('./config/config.ini')        
@@ -629,12 +740,45 @@ if __name__ == "__main__":
         manager.process_log_files()
             
         partition_file_names = manager.get_partition_file_names(manager.num_partitions)
+        partitions_not_found = 0
+        partitions_processed = 0
+        
         for partition_file in partition_file_names:
-            data_line = manager.process_partition_file(partition_file)
-            processed_data = manager.process_transactions(data_line, partition_file)
-            manager.logger.debug(f"Partición {partition_file} procesada. Inicia proceso de escritura")
-            manager.write_result_to_csv(processed_data)
-            #manager.write_in_threads(processed_data)       
+            try:
+                if not os.path.exists(partition_file):
+                    partitions_not_found += 1
+                    manager.logger.warning(f"Partición no encontrada: {partition_file}")
+                    continue
+                    
+                data_line = manager.process_partition_file(partition_file)
+                if not data_line:  # Si no hay datos en la partición
+                    manager.logger.debug(f"Partición vacía: {partition_file}")
+                    continue
+                    
+                processed_data, records_multisend = manager.process_transactions(data_line, partition_file)
+                if processed_data:  # Si hay transacciones para escribir
+                    manager.logger.debug(f"Partición {partition_file} procesada. Inicia proceso de escritura")
+                    manager.write_in_threads(processed_data,records_multisend)
+                    partitions_processed += 1
+                
+                # Liberación explícita de memoria
+                del data_line
+                del processed_data
+                del records_multisend
+                gc.collect()  # Forzar recolección de basura periódicamente
+                
+                # Reinicializar variables
+                processed_data = []
+                records_multisend = {}
+
+            except Exception as e:
+                manager.logger.error(f"Error procesando partición {partition_file}: {str(e)}")
+
+        manager.logger.info(f"Resumen de particiones:")
+        manager.logger.info(f"- Particiones procesadas: {partitions_processed}")
+        manager.logger.info(f"- Particiones no encontradas: {partitions_not_found}")
+        manager.logger.info(f"- Particiones totales esperadas: {manager.num_partitions}")
+        
     except Exception as e:
         logging.error(f"An error occurred: {e}")
     finally:
