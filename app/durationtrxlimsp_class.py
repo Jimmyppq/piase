@@ -498,7 +498,20 @@ class ProcessorFiles:
                     result['duration_limsp'] = (result['date_in_collector'] - result['Date Min']).total_seconds()
                 #result['NodeName'] = records[0]['nodename']
                 #result['Filename'] = records[0]['filename']              
-                records_complete.append(result.copy())                           
+                records_complete.append(result.copy())      
+            elif trx_in :
+                #Si la transacción termina solo con NEWTRANS se incluye bajo las siguientes convenciones
+                result['Last Action'] = 'KO'
+                result['Last Subcomponent'] = 'KO'
+                result['countSend'] = 0
+                result['date_in_collector'] = None
+                result['Duration'] = 0
+                result['duration_limsp'] = 0
+                result['date_max'] = result['Date Min']
+                records_complete.append(result.copy())
+
+
+
             '''elif incomplete_ok : 
                 #Si la transacción no tiene un ciclo completo, pero tiene un NEWTRANS o un SEND se añade a la ventana, de lo contrario no se contempla
                 self.records_incomplete[transaction_id] = copy.deepcopy(result)
@@ -702,7 +715,7 @@ class ProcessorFiles:
             return None
 
     def write_dataconfig(self):
-        self.logger.info("VERSION 6.5")
+        self.logger.info("VERSION 6.6")
         self.logger.info(f"inputPath: {self.inputFile}")
         self.logger.info(f"filePattern: {self.filePattern}")
         self.logger.info(f"ResultFinalFile: {self.resultFinalFile}")
