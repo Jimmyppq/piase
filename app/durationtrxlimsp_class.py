@@ -276,7 +276,9 @@ class ProcessorFiles:
                 return
 
             for detail in self.log_file_generator(file_path):
+                
                 transaction_id = detail['transaction_id']
+                
                 if transaction_id is None:
                     self.logger.warning(f'Missing transaction_id in line from file: {file_path}. Details: {detail}')
                     continue
@@ -306,6 +308,19 @@ class ProcessorFiles:
                         detail_fo['filename'] = file_name
                         partition_index = self.get_partition(canonical_id, num_partitions)
                         self.partition_buffers[partition_index].append(detail_fo)
+                elif action == 'SEND':
+                    if transaction_id in self.first_fo_records:
+                        # Si el transaction_id está en first_fo_records y es un un SEND, significa que hay un FailOverManager
+                        # asociado a este SEND que no se ha vinculado a un MNewtrans.
+                        detail_fo = self.first_fo_records.pop(transaction_id)
+                        canonical_id = self.uf.find(transaction_id)
+                        detail_fo['transaction_id'] = canonical_id
+                        detail_fo['nodename'] = node_name
+                        detail_fo['filename'] = file_name
+                        self.total_lines += 1
+                        partition_index = self.get_partition(canonical_id, num_partitions)
+                        self.partition_buffers[partition_index].append(detail_fo)
+
 
     
                 canonical_id = self.uf.find(transaction_id)                
@@ -314,7 +329,8 @@ class ProcessorFiles:
                 detail['filename'] = file_name
                 self.total_lines += 1
                 
-                partition_index = self.get_partition(canonical_id, num_partitions)            
+                partition_index = self.get_partition(canonical_id, num_partitions)
+
                 self.partition_buffers[partition_index].append(detail)
 
                 # Verificar si la cantidad de líneas en memoria es mayor al 90% del tamaño del chunk.
@@ -655,7 +671,7 @@ class ProcessorFiles:
         try:
             transaction_pattern = r"(transaction:)([^ ]*)"
             priority_pattern = r"pri:(\d+)"
-            match = self.pattern.match(line)
+            match = self.pattern.match(line)            
 
             if (match):
                 details = match.groupdict()
@@ -715,7 +731,7 @@ class ProcessorFiles:
             return None
 
     def write_dataconfig(self):
-        self.logger.info("VERSION 6.6")
+        self.logger.info("VERSION 6.7.0")
         self.logger.info(f"inputPath: {self.inputFile}")
         self.logger.info(f"filePattern: {self.filePattern}")
         self.logger.info(f"ResultFinalFile: {self.resultFinalFile}")
