@@ -302,6 +302,8 @@ class ProcessorFiles:
                     if mtransaction_id in self.first_fo_records:
                         detail_fo = self.first_fo_records.pop(mtransaction_id)
                         canonical_id = self.uf.find(mtransaction_id)
+                        if canonical_id is None:
+                            canonical_id = transaction_id
                         detail_fo['transaction_id'] = canonical_id
                         self.total_lines += 1
                         detail_fo['nodename'] = node_name
@@ -314,6 +316,8 @@ class ProcessorFiles:
                         # asociado a este SEND que no se ha vinculado a un MNewtrans.
                         detail_fo = self.first_fo_records.pop(transaction_id)
                         canonical_id = self.uf.find(transaction_id)
+                        if canonical_id is None:
+                            canonical_id = transaction_id
                         detail_fo['transaction_id'] = canonical_id
                         detail_fo['nodename'] = node_name
                         detail_fo['filename'] = file_name
@@ -323,7 +327,9 @@ class ProcessorFiles:
 
 
     
-                canonical_id = self.uf.find(transaction_id)                
+                canonical_id = self.uf.find(transaction_id)   
+                if canonical_id is None:
+                    canonical_id = transaction_id             
                 detail['transaction_id'] = canonical_id                
                 detail['nodename'] = node_name
                 detail['filename'] = file_name
@@ -731,7 +737,7 @@ class ProcessorFiles:
             return None
 
     def write_dataconfig(self):
-        self.logger.info("VERSION 6.7.0")
+        self.logger.info("VERSION 6.7.1")
         self.logger.info(f"inputPath: {self.inputFile}")
         self.logger.info(f"filePattern: {self.filePattern}")
         self.logger.info(f"ResultFinalFile: {self.resultFinalFile}")
