@@ -278,6 +278,7 @@ class ProcessorFiles:
             for detail in self.log_file_generator(file_path):
                 
                 transaction_id = detail['transaction_id']
+
                 
                 if transaction_id is None:
                     self.logger.warning(f'Missing transaction_id in line from file: {file_path}. Details: {detail}')
@@ -300,6 +301,7 @@ class ProcessorFiles:
                     self.uf.add_transaction(mtransaction_id)
                     self.uf.union(transaction_id, mtransaction_id)
                     if mtransaction_id in self.first_fo_records:
+ 
                         detail_fo = self.first_fo_records.pop(mtransaction_id)
                         canonical_id = self.uf.find(mtransaction_id)
                         if canonical_id is None:
@@ -310,8 +312,9 @@ class ProcessorFiles:
                         detail_fo['filename'] = file_name
                         partition_index = self.get_partition(canonical_id, num_partitions)
                         self.partition_buffers[partition_index].append(detail_fo)
-                elif action == 'SEND':
-                    if transaction_id in self.first_fo_records:
+
+                elif action == 'SEND':                   
+                    if transaction_id in self.first_fo_records:                        
                         # Si el transaction_id está en first_fo_records y es un un SEND, significa que hay un FailOverManager
                         # asociado a este SEND que no se ha vinculado a un MNewtrans.
                         detail_fo = self.first_fo_records.pop(transaction_id)
@@ -324,9 +327,13 @@ class ProcessorFiles:
                         self.total_lines += 1
                         partition_index = self.get_partition(canonical_id, num_partitions)
                         self.partition_buffers[partition_index].append(detail_fo)
+                    elif self.uf.get_tree_size(transaction_id) == 1:                        
+                        '''Esto indica que el SEND es el primer registro de la transacción, por lo tanto no se
+                        calculará aún el hash y se almacenará en el diccionario global usando transaction_id como clave'''                        
+                        self.first_fo_records[transaction_id] = detail 
+                        continue
 
 
-    
                 canonical_id = self.uf.find(transaction_id)   
                 if canonical_id is None:
                     canonical_id = transaction_id             
@@ -336,7 +343,7 @@ class ProcessorFiles:
                 self.total_lines += 1
                 
                 partition_index = self.get_partition(canonical_id, num_partitions)
-
+                
                 self.partition_buffers[partition_index].append(detail)
 
                 # Verificar si la cantidad de líneas en memoria es mayor al 90% del tamaño del chunk.
@@ -461,21 +468,6 @@ class ProcessorFiles:
                 
                 if priority != -1:
                     result['Priority'] = priority
-
-                '''if mtransaction_id is not None :
-                    #Si hay un mtransaction el action relacionado es un "MNEWTRANS"
-                    result['Transaction ID'] = mtransaction_id
-                    result['m_transaction_id'] = transaction_id 
-                    transaction_id = mtransaction_id
-                    if not trx_in :
-                        # esta condicion asegura que en los valores "min" tengan prioridad 
-                        # los NEWTRANS, y solo se ponga el valor de MNEWTRANS cuando no haya un NEWTRANS 
-                        result['Date Min'] = timestamp
-                        result['first_action'] = action
-                        result['first_subcomponent'] = subcomponent
-                        incomplete_ok = True
-                        trx_in = True
-                    continue'''
                 
                 if action == 'NEWTRANS':
                     result['Date Min'] = timestamp
@@ -531,13 +523,9 @@ class ProcessorFiles:
                 result['duration_limsp'] = 0
                 result['date_max'] = result['Date Min']
                 records_complete.append(result.copy())
-
-
-
-            '''elif incomplete_ok : 
-                #Si la transacción no tiene un ciclo completo, pero tiene un NEWTRANS o un SEND se añade a la ventana, de lo contrario no se contempla
-                self.records_incomplete[transaction_id] = copy.deepcopy(result)
-                #self.records_incomplete.append(copy.deepcopy(result))'''              
+                   
+        
+                     
                                 
             result.clear()
             
@@ -545,6 +533,33 @@ class ProcessorFiles:
             incomplete_ok = False
             trx_out = False
             trx_in = False
+
+        if records_multisend:
+            trx_data = {
+                record['Transaction ID']: {
+                    'Date Min': record['Date Min'],
+                    'duration_limsp': record['duration_limsp']
+                }
+                for record in records_complete
+            }
+
+
+            for transaction_id, sends in records_multisend.items():
+                if transaction_id in trx_data:
+                    date_min = trx_data[transaction_id]['Date Min']
+                    duration_limsp = trx_data[transaction_id]['duration_limsp']
+                    
+                    for send in sends:
+                        # Convertir date_max a datetime si no lo está ya
+                        if isinstance(send['date_max'], str):
+                            send['date_max'] = datetime.strptime(send['date_max'], "%Y/%m/%d %H:%M:%S.%f")
+                        
+                        # Calcular duration como la diferencia entre date_max y Date Min
+                        send['duration'] = (send['date_max'] - date_min).total_seconds()
+                        send['duration_limsp'] = duration_limsp
+                else:
+                    self.logger.warning(f"Transaction ID {transaction_id} not found in trx_data. Skipping multisend record.")
+                    continue
 
         return records_complete, records_multisend
     
@@ -635,7 +650,7 @@ class ProcessorFiles:
                 with open(multisend_file, 'a', newline='', encoding='utf-8') as csv_file:
                     writer = csv.DictWriter(csv_file, fieldnames=[
                         'Transaction ID', 'date_max', 'Last Action', 
-                        'Last Subcomponent'
+                        'Last Subcomponent', 'duration', 'duration_limsp'
                     ])
 
                     # Escribir encabezado si el archivo está vacío
@@ -643,11 +658,11 @@ class ProcessorFiles:
                         writer.writeheader()
 
                     # Escribir todos los registros multisend
-                    for transaction_id, sends in records_multisend.items():
-                        if sends:  # Verificar que haya envíos adicionales
-                            writer.writerows(sends)
+                    for transaction_id, envios_multi in records_multisend.items():
+                        if envios_multi:  # Verificar que haya envíos adicionales
+                            writer.writerows(envios_multi)
 
-            self.logger.info(f"Registros multisend escritos para {len(records_multisend)} transacciones")
+            self.logger.info(f"Registros multisend escritos: {len(records_multisend)}")
 
         except Exception as e:
             self.logger.error(f"Error escribiendo registros multisend: {str(e)}")
@@ -737,7 +752,7 @@ class ProcessorFiles:
             return None
 
     def write_dataconfig(self):
-        self.logger.info("VERSION 6.7.1")
+        self.logger.info("VERSION 6.7.2")
         self.logger.info(f"inputPath: {self.inputFile}")
         self.logger.info(f"filePattern: {self.filePattern}")
         self.logger.info(f"ResultFinalFile: {self.resultFinalFile}")
