@@ -11,6 +11,7 @@ import gc
 import time
 import csv
 import fnmatch
+import traceback
 from pathlib import Path
 from collections import defaultdict
 from UnionFind import UnionFind
@@ -193,7 +194,7 @@ class ProcessorFiles:
                 self.create_partitions(file_path, node_name, file_name, self.num_partitions)
             except Exception as e:
                 # Logging detallado del error
-                import traceback
+                
                 error_details = traceback.format_exc()
                 self.loggerfiles.error(
                     f'Error processing file {file_name}:\n'
@@ -432,7 +433,9 @@ class ProcessorFiles:
 
     def process_transactions(self, data_line,partition_file):
           
-        records_multisend = {}
+        # El defaultdict externo crea un defaultdict(dict) cuando una clave no existe.
+        records_multisend = defaultdict(lambda: defaultdict(dict))
+        
         records_complete = []
 
         for transaction_id, records in data_line.items():
@@ -449,6 +452,7 @@ class ProcessorFiles:
                 'Last Action': None,
                 'Last Subcomponent': None,
                 'countSend': 0,
+                'countMNewtrans':0,
                 'date_in_collector': None,
                 'Duration': 0,
                 'duration_limsp': 0,
@@ -464,7 +468,24 @@ class ProcessorFiles:
                 priority = record.get('priority', -1)
                 node_name = record.get('nodename')
                 file_name = record.get('filename')
-                #mtransaction_id = record.get('mtransaction_id')
+                mtransaction_id = record.get('Mtransaction_id')
+
+                if mtransaction_id :
+                    result['countMNewtrans'] +=1
+                    if result['countMNewtrans'] > 1:
+                        records_multisend[transaction_id][mtransaction_id].update({
+                            'm_transaction_id': mtransaction_id
+                        })  
+                else:
+                    pattern_mtrx = r"transaction:(\S+)"
+                    match_mtrx = re.search(pattern_mtrx, record.get('details'))
+                    if match_mtrx:
+                        # Si se encontró el patrón, el grupo 1 contiene nuestro ID
+                        mtransaction_id = match_mtrx.group(1)
+                    else:
+                        mtransaction_id = None
+
+
                 
                 if priority != -1:
                     result['Priority'] = priority
@@ -475,34 +496,41 @@ class ProcessorFiles:
                     result['first_subcomponent'] = subcomponent
                     result['NodeName']= node_name
                     result['Filename'] = file_name                  
-                    incomplete_ok = True
+                    
                     trx_in = True
                     continue
                       
                 if action == 'SEND':                    
-                    if result['countSend'] == 0:    
-                        records_multisend[transaction_id] = []                    
+                    if result['countSend'] == 0:                                                                     
                         result['date_max'] = timestamp
                         result['Last Action'] = action
                         result['Last Subcomponent'] = subcomponent
                         result['countSend'] += 1
                         trx_out = True
-                        incomplete_ok = True                                                             
+                                                                                     
                     else:
                         result['countSend'] +=1
-                        records_multisend[transaction_id].append({
+                        # Accedemos al registro específico usando ambos IDs y lo actualizamos
+                        records_multisend[transaction_id][mtransaction_id].update({
                             'Transaction ID': transaction_id,
                             'date_max': timestamp,
                             'Last Action': action,
-                            'Last Subcomponent': subcomponent,
-                        })                        
+                            'Last Subcomponent': subcomponent
+                        })
+                                                                    
                     continue
 
-                if not flowctrl:
-                    if action == 'OUT' and subcomponent == 'FailOverManager' :
+                if action == 'OUT' and subcomponent == 'FailOverManager' :
+                    if not flowctrl:                    
                         result['date_in_collector'] = timestamp                        
-                        flowctrl = True 
-                        incomplete_ok = True                       
+                        flowctrl = True
+                    elif result['countSend'] > 0:
+                        #indica que ya se ha registrado una salida de un FailOver y esta es una mas
+                        #así que se debe registrar en un nuevo
+                        records_multisend[transaction_id][mtransaction_id].update({
+                            'date_in_collector': timestamp
+                        })
+                                                       
                     continue
             
             #Si la transacción tiene un ciclo completo (entrada y salida) calcular duraciones y añadirlo a una lista para posteriormente escribirlo a disco
@@ -523,9 +551,6 @@ class ProcessorFiles:
                 result['duration_limsp'] = 0
                 result['date_max'] = result['Date Min']
                 records_complete.append(result.copy())
-                   
-        
-                     
                                 
             result.clear()
             
@@ -537,26 +562,44 @@ class ProcessorFiles:
         if records_multisend:
             trx_data = {
                 record['Transaction ID']: {
-                    'Date Min': record['Date Min'],
-                    'duration_limsp': record['duration_limsp']
+                    'Date Min': record['Date Min']
                 }
                 for record in records_complete
             }
-
-
-            for transaction_id, sends in records_multisend.items():
+            for transaction_id, m_records_dict in records_multisend.items():
                 if transaction_id in trx_data:
                     date_min = trx_data[transaction_id]['Date Min']
-                    duration_limsp = trx_data[transaction_id]['duration_limsp']
-                    
-                    for send in sends:
-                        # Convertir date_max a datetime si no lo está ya
-                        if isinstance(send['date_max'], str):
-                            send['date_max'] = datetime.strptime(send['date_max'], "%Y/%m/%d %H:%M:%S.%f")
+                    for record_data in m_records_dict.values():
+                        try:
+                            # Convertir date_max a datetime si no lo está ya
+                            if isinstance(record_data.get('date_max'), str):
+                                record_data['date_max'] = datetime.strptime(record_data['date_max'], "%Y/%m/%d %H:%M:%S.%f")
+                            
+                            if isinstance(record_data.get('date_in_collector'),str):
+                               record_data['date_in_collector'] = datetime.strptime(record_data['date_in_collector'], "%Y/%m/%d %H:%M:%S.%f") 
+                            
+                            # Asegurarnos que tenemos un date_max válido antes de calcular
+                            if record_data.get('date_max'):
+                                # Calcular duration como la diferencia entre date_max y Date Min
+                                duration = (record_data['date_max'] - date_min).total_seconds()
+                                record_data['Duration'] = duration
+                            else:
+                                # Opcional: manejar el caso donde una fila no tiene 'date_max'
+                                record_data['Duration'] = 0 
+
+                            if record_data.get('date_in_collector'):
+                                # Calcular duration_limsp como la diferencia entre date_in_collector y Date Min
+                                duration = (record_data['date_in_collector'] - date_min).total_seconds()
+                                record_data['duration_limsp'] = duration
+                            else:
+                                # Opcional: manejar el caso donde una fila no tiene 'date_max'
+                                record_data['duration_limsp'] = 0 
                         
-                        # Calcular duration como la diferencia entre date_max y Date Min
-                        send['duration'] = (send['date_max'] - date_min).total_seconds()
-                        send['duration_limsp'] = duration_limsp
+                        except (TypeError, ValueError) as e:
+                            # Opcional pero recomendado: Manejar errores si las fechas no son válidas
+                            # print(f"No se pudo calcular la duración para el registro {record_data.get('m_transaction_id')}: {e}")
+                            record_data['duration'] = 0
+                            record_data['duration_limsp'] = 0
                 else:
                     self.logger.warning(f"Transaction ID {transaction_id} not found in trx_data. Skipping multisend record.")
                     continue
@@ -606,16 +649,18 @@ class ProcessorFiles:
                 return
             
             self.logger.debug(f"Se inicia escritura de transacciones al archivo binario. {len(records_complete)}")
+            fieldnames = [
+            'Transaction ID', 'Date Min', 'date_max', 'Priority',
+            'first_action', 'first_subcomponent', 'Last Action', 
+            'Last Subcomponent', 'countSend', 'date_in_collector', 
+            'Duration', 'duration_limsp', 'NodeName', 'Filename', 
+            'm_transaction_id'
+            ]
+            
             with self.csv_lock:  # Bloqueo para evitar condiciones de carrera
                 # Abrir archivo en modo append
                 with open(self.resultFinalFile, 'a', newline='', encoding='utf-8') as csv_file:
-                    writer = csv.DictWriter(csv_file, fieldnames=[
-                        'Transaction ID', 'Date Min', 'date_max', 'Priority',
-                        'first_action', 'first_subcomponent', 'Last Action', 
-                        'Last Subcomponent', 'countSend', 'date_in_collector', 
-                        'Duration', 'duration_limsp', 'NodeName', 'Filename', 
-                        'm_transaction_id'
-                    ])
+                    writer = csv.DictWriter(csv_file, fieldnames=fieldnames, extrasaction='ignore')
 
                     # Escribir encabezado solo una vez
                     if not self.csv_initialized:
@@ -645,24 +690,43 @@ class ProcessorFiles:
                 
             multisend_file = self.resultFinalFile.replace('.csv', '_multisend.csv')
             self.logger.debug(f"Se inicia escritura de transacciones multisend. Total IDs: {len(records_multisend)}")
-            
-            with self.csv_lock:  # Usar el mismo lock para evitar conflictos
-                with open(multisend_file, 'a', newline='', encoding='utf-8') as csv_file:
-                    writer = csv.DictWriter(csv_file, fieldnames=[
-                        'Transaction ID', 'date_max', 'Last Action', 
-                        'Last Subcomponent', 'duration', 'duration_limsp'
-                    ])
 
-                    # Escribir encabezado si el archivo está vacío
+            csv_headers = [
+                'Transaction ID', 'Date Min', 'date_max', 'Priority', 'first_action', 
+                'first_subcomponent', 'Last Action', 'Last Subcomponent', 'countSend', 
+                'date_in_collector', 'Duration', 'duration_limsp', 'NodeName', 
+                'Filename', 'm_transaction_id'
+            ]
+            # Usamos un contador para llevar la cuenta de las filas reales escritas
+            rows_written = 0
+
+            with self.csv_lock:                
+                with open(multisend_file, 'a', newline='', encoding='utf-8') as csv_file:
+                    writer = csv.DictWriter(csv_file, fieldnames=csv_headers)
+
+                    # Escribir encabezado si el archivo es nuevo/está vacío
                     if csv_file.tell() == 0:
                         writer.writeheader()
 
-                    # Escribir todos los registros multisend
-                    for transaction_id, envios_multi in records_multisend.items():
-                        if envios_multi:  # Verificar que haya envíos adicionales
-                            writer.writerows(envios_multi)
+                    # 2. Iteramos sobre la estructura anidada para escribir los datos
+                    # Bucle Externo: no cambia
+                    for transaction_id, m_records_dict in records_multisend.items():
+                        
+                        # Bucle Interno: usamos .items() para obtener la clave y el valor
+                        # 'm_id' será la clave (ej: 'UNO51...oY4')
+                        # 'record_data' será el diccionario con los datos de la fila
+                        for m_id, record_data in m_records_dict.items():                            
+                            # 3. El Truco Clave: Añadimos el m_transaction_id al diccionario
+                            #    justo antes de escribirlo. DictWriter ahora encontrará este campo.
+                            #    Esto cumple tu requisito de usar el ÍNDICE y no un campo interno.
+                            record_data['m_transaction_id'] = m_id
+                            
+                            # 4. Escribimos la fila individualmente.
+                            #    Esto es más eficiente en memoria que crear una lista grande.
+                            writer.writerow(record_data)
+                            rows_written += 1
 
-            self.logger.info(f"Registros multisend escritos: {len(records_multisend)}")
+            self.logger.info(f"Registros (filas) multisend escritos: {rows_written}")            
 
         except Exception as e:
             self.logger.error(f"Error escribiendo registros multisend: {str(e)}")
@@ -752,7 +816,7 @@ class ProcessorFiles:
             return None
 
     def write_dataconfig(self):
-        self.logger.info("VERSION 6.7.2")
+        self.logger.info("VERSION 6.7.3")
         self.logger.info(f"inputPath: {self.inputFile}")
         self.logger.info(f"filePattern: {self.filePattern}")
         self.logger.info(f"ResultFinalFile: {self.resultFinalFile}")
