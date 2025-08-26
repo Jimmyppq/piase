@@ -484,9 +484,7 @@ class ProcessorFiles:
                         mtransaction_id = match_mtrx.group(1)
                     else:
                         mtransaction_id = None
-
-
-                
+               
                 if priority != -1:
                     result['Priority'] = priority
                 
@@ -495,8 +493,7 @@ class ProcessorFiles:
                     result['first_action'] = action
                     result['first_subcomponent'] = subcomponent
                     result['NodeName']= node_name
-                    result['Filename'] = file_name                  
-                    
+                    result['Filename'] = file_name      
                     trx_in = True
                     continue
                       
@@ -532,6 +529,25 @@ class ProcessorFiles:
                         })
                                                        
                     continue
+
+            if transaction_id in records_multisend:
+                # Obtenemos una referencia al diccionario interno para trabajar con él.
+                m_records_dict = records_multisend[transaction_id]
+                # Lista para recolectar los sub-registros que no cumplan la condición
+                m_ids_to_delete = []
+
+                # 2. Iteramos sobre los sub-registros para encontrar los que no tienen 'date_max'.
+                #    Usamos .items() para obtener tanto la clave (m_id) como el diccionario de datos.
+                for m_id, record_data in m_records_dict.items():
+                    if 'date_max' not in record_data:
+                        # 3. "Marcamos" el sub-registro para su eliminación.
+                        m_ids_to_delete.append(m_id)
+
+                 # 4. Una vez terminado el bucle, eliminamos de forma segura los registros marcados.
+                if m_ids_to_delete:                    
+                    for m_id in m_ids_to_delete:
+                        del m_records_dict[m_id]
+
             
             #Si la transacción tiene un ciclo completo (entrada y salida) calcular duraciones y añadirlo a una lista para posteriormente escribirlo a disco
             if trx_in and trx_out :
@@ -816,7 +832,7 @@ class ProcessorFiles:
             return None
 
     def write_dataconfig(self):
-        self.logger.info("VERSION 6.7.3")
+        self.logger.info("VERSION 6.7.3.1")
         self.logger.info(f"inputPath: {self.inputFile}")
         self.logger.info(f"filePattern: {self.filePattern}")
         self.logger.info(f"ResultFinalFile: {self.resultFinalFile}")
