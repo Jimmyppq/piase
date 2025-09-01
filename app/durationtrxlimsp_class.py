@@ -521,7 +521,7 @@ class ProcessorFiles:
                     if not flowctrl:                    
                         result['date_in_collector'] = timestamp                        
                         flowctrl = True
-                    elif result['countSend'] > 0:
+                    elif result['countMNewtrans'] > 0 or result['countSend'] > 0:
                         #indica que ya se ha registrado una salida de un FailOver y esta es una mas
                         #así que se debe registrar en un nuevo
                         records_multisend[transaction_id][mtransaction_id].update({
@@ -832,7 +832,7 @@ class ProcessorFiles:
             return None
 
     def write_dataconfig(self):
-        self.logger.info("VERSION 6.7.3.1")
+        self.logger.info("VERSION 6.7.3.2")
         self.logger.info(f"inputPath: {self.inputFile}")
         self.logger.info(f"filePattern: {self.filePattern}")
         self.logger.info(f"ResultFinalFile: {self.resultFinalFile}")
