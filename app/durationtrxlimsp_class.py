@@ -520,7 +520,8 @@ class ProcessorFiles:
                     continue
 
                 if action == 'OUT' and subcomponent == 'FailOverManager' :
-                    if mtransaction_id == result['m_transaction_id']:                                       
+                    flowctrl = True
+                    if mtransaction_id == result['m_transaction_id'] or result['countMNewtrans'] == 0:                                       
                         result['date_in_collector'] = timestamp
                     else:
                          records_multisend[transaction_id][mtransaction_id].update({
@@ -545,7 +546,6 @@ class ProcessorFiles:
                 if m_ids_to_delete:                    
                     for m_id in m_ids_to_delete:
                         del m_records_dict[m_id]
-
             
             #Si la transacción tiene un ciclo completo (entrada y salida) calcular duraciones y añadirlo a una lista para posteriormente escribirlo a disco
             if trx_in and trx_out :
@@ -566,8 +566,7 @@ class ProcessorFiles:
                 result['date_max'] = result['Date Min']
                 records_complete.append(result.copy())
                                 
-            result.clear()
-            
+            result.clear()            
             flowctrl = False            
             trx_out = False
             trx_in = False
@@ -829,7 +828,7 @@ class ProcessorFiles:
             return None
 
     def write_dataconfig(self):
-        self.logger.info("VERSION 6.7.3.3")
+        self.logger.info("VERSION 6.7.3.4")
         self.logger.info(f"inputPath: {self.inputFile}")
         self.logger.info(f"filePattern: {self.filePattern}")
         self.logger.info(f"ResultFinalFile: {self.resultFinalFile}")
