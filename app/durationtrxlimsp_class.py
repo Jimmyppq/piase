@@ -431,7 +431,7 @@ class ProcessorFiles:
 
         return partition_files
 
-    def process_transactions(self, data_line,partition_file):
+    def process_transactions(self, data_line):
           
         # El defaultdict externo crea un defaultdict(dict) cuando una clave no existe.
         records_multisend = defaultdict(lambda: defaultdict(dict))
@@ -475,7 +475,10 @@ class ProcessorFiles:
                     if result['countMNewtrans'] > 1:
                         records_multisend[transaction_id][mtransaction_id].update({
                             'm_transaction_id': mtransaction_id
-                        })  
+                        })
+                    else:
+                        result['m_transaction_id'] = mtransaction_id
+                
                 else:
                     pattern_mtrx = r"transaction:(\S+)"
                     match_mtrx = re.search(pattern_mtrx, record.get('details'))
@@ -498,13 +501,12 @@ class ProcessorFiles:
                     continue
                       
                 if action == 'SEND':                    
-                    if result['countSend'] == 0:                                                                     
+                    if mtransaction_id == result['m_transaction_id']:                                                                      
                         result['date_max'] = timestamp
                         result['Last Action'] = action
                         result['Last Subcomponent'] = subcomponent
                         result['countSend'] += 1
-                        trx_out = True
-                                                                                     
+                        trx_out = True                                                                                     
                     else:
                         result['countSend'] +=1
                         # Accedemos al registro específico usando ambos IDs y lo actualizamos
@@ -518,16 +520,12 @@ class ProcessorFiles:
                     continue
 
                 if action == 'OUT' and subcomponent == 'FailOverManager' :
-                    if not flowctrl:                    
-                        result['date_in_collector'] = timestamp                        
-                        flowctrl = True
-                    elif result['countMNewtrans'] > 0 or result['countSend'] > 0:
-                        #indica que ya se ha registrado una salida de un FailOver y esta es una mas
-                        #así que se debe registrar en un nuevo
-                        records_multisend[transaction_id][mtransaction_id].update({
+                    if mtransaction_id == result['m_transaction_id']:                                       
+                        result['date_in_collector'] = timestamp
+                    else:
+                         records_multisend[transaction_id][mtransaction_id].update({
                             'date_in_collector': timestamp
-                        })
-                                                       
+                        })                                                       
                     continue
 
             if transaction_id in records_multisend:
@@ -570,8 +568,7 @@ class ProcessorFiles:
                                 
             result.clear()
             
-            flowctrl = False 
-            incomplete_ok = False
+            flowctrl = False            
             trx_out = False
             trx_in = False
 
@@ -832,7 +829,7 @@ class ProcessorFiles:
             return None
 
     def write_dataconfig(self):
-        self.logger.info("VERSION 6.7.3.2")
+        self.logger.info("VERSION 6.7.3.3")
         self.logger.info(f"inputPath: {self.inputFile}")
         self.logger.info(f"filePattern: {self.filePattern}")
         self.logger.info(f"ResultFinalFile: {self.resultFinalFile}")
@@ -885,7 +882,7 @@ if __name__ == "__main__":
                     manager.logger.debug(f"Partición vacía: {partition_file}")
                     continue
                     
-                processed_data, records_multisend = manager.process_transactions(data_line, partition_file)
+                processed_data, records_multisend = manager.process_transactions(data_line)
                 if processed_data:  # Si hay transacciones para escribir
                     manager.logger.debug(f"Partición {partition_file} procesada. Inicia proceso de escritura")
                     manager.write_in_threads(processed_data,records_multisend)
