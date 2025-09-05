@@ -17,7 +17,27 @@ from collections import defaultdict
 from UnionFind import UnionFind
 from threading import Lock
 from datetime import datetime
+from dataclasses import dataclass, asdict, fields
+from typing import Optional
 
+@dataclass
+class TransactionData:
+    transaction_id: str
+    date_min: Optional[datetime] = None
+    date_max: Optional[datetime] = None
+    priority: int = -1
+    first_action: Optional[str] = None
+    first_subcomponent: Optional[str] = None
+    last_action: Optional[str] = None
+    last_subcomponent: Optional[str] = None
+    count_send: int = 0
+    count_mnewtrans: int = 0
+    date_in_collector: Optional[datetime] = None
+    duration: float = 0.0
+    duration_limsp: float = 0.0
+    node_name: Optional[str] = None
+    file_name: Optional[str] = None
+    m_transaction_id: Optional[str] = None
 
 class ProcessorFiles:
     # Constantes para los límites de memoria
@@ -92,24 +112,18 @@ class ProcessorFiles:
         self.IncompleteTransactionsFile = self.config['PROCESS_FILES']['IncompleteTransactionsFile']
                 
         self.chunk_size = self.config['PROCESS_FILES'].getint('Chunk_size', 1000000)
-        #self.mem_trx_security = self.config['PROCESS_FILES'].getint('mem_trx_security', 5000000)        
         self.valid_actions = set(self.config['PROCESS_FILES']['valid_actions'].split(','))
         self.valid_subcomponents = set(self.config['PROCESS_FILES']['valid_subcomponents'].split(','))
-        # tienmpo en segundos que se ejecutará el hilo que registra actividad en los logs
         self.timeToLog = self.config['PROCESS_FILES'].getint('timeToLog', fallback=120)
         self.resultFinalFile = self.config['PROCESS_FILES']['ResultFinalFile']
         self.order_patterns = self.config['PROCESS_FILES'].get('file_order_patterns', 'limsp_adaptor*,limmsp_bus_massive*,limsp_bus*,limsp_collector*').split(',')
-        self.num_partitions = self.config['PROCESS_FILES'].getint('num_partitions', 30)  # 30 como valor por defecto
+        self.num_partitions = self.config['PROCESS_FILES'].getint('num_partitions', 30)
 
-        # Cargar el patrón desde la configuración
         pattern = self.config['PROCESS_FILES'].get('log_pattern')
         if pattern:
-            # Si existe en config, eliminar comillas dobles y procesar escapes
             pattern = pattern.strip('"')
-            # Convertir los dobles backslashes en singles
-            pattern = pattern.replace('\\\\', '\\')
+            pattern = pattern.replace('\\', '\\')
         
-        # Usar el patrón procesado o el valor por defecto
         self.log_pattern_str = pattern or r'\[(?P<timestamp>\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}(?:\.\d{3})?)\]\s+(?P<action>.+?)\s+(?P<subcomponent>.+?)\s+(?P<details>.+)'
 
     def compile_regular_expression(self):
@@ -121,48 +135,32 @@ class ProcessorFiles:
             raise
 
     def orderbydate(self):
-        """
-        Ordena los archivos según un orden de patrones configurable y luego por fecha de modificación.
-        """
-        files = [file for file in Path(self.inputFile).rglob(self.filePattern) if file.is_file()]        
-        
-        # Obtener el orden de los patrones desde la configuración        
+        files = [file for file in Path(self.inputFile).rglob(self.filePattern) if file.is_file()]
         order_patterns = [pattern.strip() for pattern in self.order_patterns]
         
         def sort_key(file):
             filename = file.name
             for i, pattern in enumerate(order_patterns):
                 if fnmatch.fnmatch(filename, pattern):
-                    return (i, file.stat().st_mtime)  # Prioridad por patrón, luego por fecha
-            return (len(order_patterns), file.stat().st_mtime)  # Si no coincide, al final, ordenado por fecha
+                    return (i, file.stat().st_mtime)
+            return (len(order_patterns), file.stat().st_mtime)
 
-        files_sorted = sorted(files, key=sort_key)        
-        return files_sorted        
+        return sorted(files, key=sort_key)
 
     def stable_hash(self,transaction_id: str) -> int:
-        """
-        Calcula un hash estable para un transaction_id utilizando MD5.
-        Se convierte el hash hexadecimal en un entero.
-        """
-        # Convertir el transaction_id a bytes y calcular el hash MD5
         hash_obj = hashlib.md5(transaction_id.encode('utf-8'))
-        # Convertir el hash en hexadecimal a un entero (base 16)
         return int(hash_obj.hexdigest(), 16)
 
     def get_partition(self,transaction_id: str, num_partitions: int) -> int:
-        """
-        Retorna el índice de partición para un transaction_id dado el número total de particiones.
-        """
         return self.stable_hash(transaction_id) % num_partitions
     
-    def process_log_files(self):   
-        
+    def process_log_files(self):
+   
         self.directory_path = Path(self.inputFile)
         
-        # Verificar si los archivos existen y eliminarlos        
         if os.path.exists(self.IncompleteTransactionsFile):
             os.remove(self.IncompleteTransactionsFile)
-            self.logger.warning(f'Archivo {self.IncompleteTransactionsFile} existe previamente. Se elimina antes de iniciar')        
+            self.logger.warning(f'Archivo {self.IncompleteTransactionsFile} existe previamente. Se elimina antes de iniciar')
         
         matching_files = list(self.directory_path.rglob(self.filePattern)) 
         self.totalFiles = len(matching_files)
@@ -188,29 +186,13 @@ class ProcessorFiles:
             file_path = Path(file_path)
             node_name = file_path.parent.name
             file_name = file_path.name
-            path, file_name = os.path.split(file_path)
-            self.loggerfiles.debug(f'Nodo: {node_name} -- Archivo ({self.countFiles}): {file_name} -- Path: {path}')   
             try:
                 self.create_partitions(file_path, node_name, file_name, self.num_partitions)
             except Exception as e:
-                # Logging detallado del error
-                
                 error_details = traceback.format_exc()
-                self.loggerfiles.error(
-                    f'Error processing file {file_name}:\n'
-                    f'Error type: {type(e).__name__}\n'
-                    f'Error message: {str(e)}\n'
-                    f'Stack trace:\n{error_details}'
-                )
-                # Información adicional del estado
-                self.loggerfiles.error(
-                    f'Estado actual:\n'
-                    f'- Líneas procesadas: {self.total_lines}\n'
-                    f'- Registros FailOver pendientes: {len(self.first_fo_records)}\n'
-                    f'- Tamaño buffer particiones: {sum(len(buf) for buf in self.partition_buffers.values())}'
-                )
+                self.loggerfiles.error(f'Error processing file {file_name}:\n' + f'Error type: {type(e).__name__}\n' + f'Error message: {str(e)}\n' + f'Stack trace:\n{error_details}')
+                self.loggerfiles.error(f'Estado actual:\n' + f'- Líneas procesadas: {self.total_lines}\n' + f'- Registros FailOver pendientes: {len(self.first_fo_records)}\n' + f'- Tamaño buffer particiones: {sum(len(buf) for buf in self.partition_buffers.values())}')
         
-        # Escribir los datos restantes al final del archivo
         self.logger.info('Se han procesado todos los archivos. Se escriben los registros restantes...')
         if self.first_fo_records:
             self.logger.info(f"{len(self.first_fo_records)} registros de FailOver quedaron sin relacionar")
@@ -219,28 +201,25 @@ class ProcessorFiles:
             self.flush_partition_buffers(self.num_partitions)
             
         self.logger.info('Se han creado todas las particiones. Se inicia el procesamiento de estas...')
-        del self.uf  # Liberar memoria de la estructura Union-Find
-        del self.partition_buffers  # Liberar memoria de los buffers de particiones
-        del self.first_fo_records  # Liberar memoria de la lista de registros de FailOver
-        gc.collect()  # Forzar la recolección de basura
+        del self.uf, self.partition_buffers, self.first_fo_records
+        gc.collect()
 
         self.keep_running = False
-        progress_thread.join()
+        progress_thread.join() 
   
     def log_progress(self):
         while self.keep_running:
-            #self.monitor_resources()  # Añadir monitoreo
-            if not self.process :
+            if not self.process:
                 parcial_time = time.time()
                 total_time = parcial_time - self.start_time
                 progressFiles = (self.countFiles/self.totalFiles)*100
                 total_fo_records = len(self.first_fo_records)
                 self.logger.info(f"Total de archivos procesados {self.countFiles}, progreso {progressFiles:.2f}%. {total_fo_records} registros de FailOver sin relacionar")
-                if total_time > 3600 :
+                if total_time > 3600:
                     logging.info(f"Tiempo transcurrido: {total_time / 3600:.2f} horas.")
                 else:
                     logging.info(f"Tiempo transcurrido: {total_time / 60:.2f} minutos.")
-            time.sleep(self.timeToLog)  # Esperar x segundos                               
+            time.sleep(self.timeToLog)
 
     def flush_partition_buffers(self, num_partitions):
         cant_partitions_written = 0
@@ -250,37 +229,23 @@ class ProcessorFiles:
             buffer = self.partition_buffers.get(partition_index, [])
             if buffer:
                 cant_partitions_written += 1
-                # Escribe el buffer en bloque
                 with open(partition_file, 'ab') as f:
                     pickle.dump(buffer, f)
                 self.logger.debug(f"Se han escrito {len(buffer)} registros en la partición {partition_index}.")
-                # Vacía el buffer
                 self.partition_buffers[partition_index] = []
-
         self.logger.info(f"Se han escrito {cant_partitions_written} particiones en disco.")
 
     def create_partitions(self, file_path, node_name, file_name, num_partitions: int):
-        '''import psutil
-        process = psutil.Process()'''
-        
         try:
-            #initial_memory = process.memory_info().rss / 1024 / 1024  # MB
-            #self.loggerfiles.debug(f'Memoria inicial: {initial_memory:.2f} MB')
-            
             if not hasattr(self, 'partition_buffers'):
                 self.partition_buffers = {i: [] for i in range(num_partitions)}
-                        
-            detail_fo = []
             
             if not os.access(file_path, os.R_OK):
                 self.loggerfiles.error(f"No hay acceso de lectura al archivo: {file_path}")
                 return
 
             for detail in self.log_file_generator(file_path):
-                
                 transaction_id = detail['transaction_id']
-
-                
                 if transaction_id is None:
                     self.logger.warning(f'Missing transaction_id in line from file: {file_path}. Details: {detail}')
                     continue
@@ -288,12 +253,9 @@ class ProcessorFiles:
                 action = detail['action']
                 subcomponent = detail['subcomponent']
 
-                if action == 'OUT' and subcomponent == 'FailOverManager' :                    
-                    if  self.uf.get_tree_size(transaction_id) == 0:
-                        '''Esto indica que el FailOver es el primer registro de la transacción, por lo tanto no se
-                        calculará aún el hash y se almacenará en el diccionario global usando transaction_id como clave'''                        
-                        self.first_fo_records[transaction_id] = detail 
-                        continue
+                if action == 'OUT' and subcomponent == 'FailOverManager' and self.uf.get_tree_size(transaction_id) == 0:
+                    self.first_fo_records[transaction_id] = detail
+                    continue
                 
                 self.uf.add_transaction(transaction_id)
                 
@@ -302,11 +264,8 @@ class ProcessorFiles:
                     self.uf.add_transaction(mtransaction_id)
                     self.uf.union(transaction_id, mtransaction_id)
                     if mtransaction_id in self.first_fo_records:
- 
                         detail_fo = self.first_fo_records.pop(mtransaction_id)
-                        canonical_id = self.uf.find(mtransaction_id)
-                        if canonical_id is None:
-                            canonical_id = transaction_id
+                        canonical_id = self.uf.find(mtransaction_id) or transaction_id
                         detail_fo['transaction_id'] = canonical_id
                         self.total_lines += 1
                         detail_fo['nodename'] = node_name
@@ -314,83 +273,42 @@ class ProcessorFiles:
                         partition_index = self.get_partition(canonical_id, num_partitions)
                         self.partition_buffers[partition_index].append(detail_fo)
 
-                elif action == 'SEND':                   
-                    if transaction_id in self.first_fo_records:                        
-                        # Si el transaction_id está en first_fo_records y es un un SEND, significa que hay un FailOverManager
-                        # asociado a este SEND que no se ha vinculado a un MNewtrans.
+                elif action == 'SEND':
+                    if transaction_id in self.first_fo_records:
                         detail_fo = self.first_fo_records.pop(transaction_id)
-                        canonical_id = self.uf.find(transaction_id)
-                        if canonical_id is None:
-                            canonical_id = transaction_id
+                        canonical_id = self.uf.find(transaction_id) or transaction_id
                         detail_fo['transaction_id'] = canonical_id
                         detail_fo['nodename'] = node_name
                         detail_fo['filename'] = file_name
                         self.total_lines += 1
                         partition_index = self.get_partition(canonical_id, num_partitions)
                         self.partition_buffers[partition_index].append(detail_fo)
-                    elif self.uf.get_tree_size(transaction_id) == 1:                        
-                        '''Esto indica que el SEND es el primer registro de la transacción, por lo tanto no se
-                        calculará aún el hash y se almacenará en el diccionario global usando transaction_id como clave'''                        
-                        self.first_fo_records[transaction_id] = detail 
+                    elif self.uf.get_tree_size(transaction_id) == 1:
+                        self.first_fo_records[transaction_id] = detail
                         continue
 
-
-                canonical_id = self.uf.find(transaction_id)   
-                if canonical_id is None:
-                    canonical_id = transaction_id             
-                detail['transaction_id'] = canonical_id                
+                canonical_id = self.uf.find(transaction_id) or transaction_id
+                detail['transaction_id'] = canonical_id
                 detail['nodename'] = node_name
                 detail['filename'] = file_name
                 self.total_lines += 1
                 
                 partition_index = self.get_partition(canonical_id, num_partitions)
-                
                 self.partition_buffers[partition_index].append(detail)
 
-                # Verificar si la cantidad de líneas en memoria es mayor al 90% del tamaño del chunk.
-                # Dado que esta validación se hace al final del procesamiento del for (es decir de un archivo completo).
-                # Al validar por encima del 80% se puede llegar a tener en memoria una cantidad de líneas superior al 90% e incluso
-                # si un archivo fuera lo suficientemente grande un valor cercano o superior al 100%
                 if self.total_lines >= self.chunk_size * self.CHUNK_LIMIT:
                     self.logger.debug(f"Total de líneas alcanzadas {self.total_lines}. Se empiezan a procesar")
                     self.flush_partition_buffers(num_partitions)
-                    # Reiniciar el contador global y vaciar buffers de data_line si procede
                     self.total_lines = 0
-                    # Dependiendo de la lógica, podrías limpiar también self.data_line o mantener las transacciones incompletas.
-            #final_memory = process.memory_info().rss / 1024 / 1024
-            '''self.loggerfiles.debug(
-                f'Memoria final: {final_memory:.2f} MB\n'
-                f'Diferencia: {final_memory - initial_memory:.2f} MB'
-            )'''
         except Exception as e:
-            #current_memory = process.memory_info().rss / 1024 / 1024
-            self.loggerfiles.error(
-                f'Error en UnionFind operations:\n'
-                f'Transaction ID: {transaction_id}\n'
-                #f'Error con uso de memoria: {current_memory:.2f} MB\n'
-                f'Error: {str(e)}'
-            )
+            self.loggerfiles.error(f'Error en UnionFind operations: Transaction ID: {transaction_id}, Error: {str(e)}')
             raise
-   
-               
-    def process_partition_file(self, partition_file_path):
-        """
-        Procesa un archivo de partición y retorna los registros agrupados por transaction_id.
-        
-        Args:
-            partition_file_path (str): Ruta al archivo de partición
-        
-        Returns:
-            defaultdict: Diccionario con registros agrupados por transaction_id
-            None: Si el archivo no existe o hay error en la lectura
-        """
-        data_line = defaultdict(list)
-        total_records = 0
 
+    def process_partition_file(self, partition_file_path):
+        data_line = defaultdict(list)
         if not os.path.exists(partition_file_path):
             self.logger.warning(f"La partición no existe: {partition_file_path}")
             return data_line
-
         try:
             self.logger.debug(f"Leyendo la partición: {partition_file_path}")
             with open(partition_file_path, 'rb') as f:
@@ -398,38 +316,28 @@ class ProcessorFiles:
                     try:
                         chunk = pickle.load(f)
                         for record in chunk:
-                            transaction_id = record.get('transaction_id')
-                            if transaction_id:  # Validación adicional
+                            if transaction_id := record.get('transaction_id'):
                                 data_line[transaction_id].append(record)
-                                total_records += 1
-                        del chunk  # Libera memoria
                     except EOFError:
                         break
                     except pickle.UnpicklingError as e:
                         self.logger.error(f"Error al deserializar datos en {partition_file_path}: {str(e)}")
                         break
-
-            self.logger.debug(f"Registros leídos: {total_records}")
             return data_line
-
         except IOError as e:
             self.logger.error(f"Error de I/O al leer {partition_file_path}: {str(e)}")
             return data_line
         except Exception as e:
             self.logger.error(f"Error inesperado procesando {partition_file_path}: {str(e)}")
             return data_line
-    
-    def get_partition_file_names(self, num_partitions: int) -> list:
-        """
-        Retorna una lista con los nombres de los archivos de partición,
-        según el número de particiones dado.
-        """
-        partition_files = []
-        for i in range(num_partitions):
-            partition_file = f"{self.IncompleteTransactionsFile}_{i}.bin"
-            partition_files.append(partition_file)
 
-        return partition_files
+    def get_partition_file_names(self, num_partitions: int) -> list:
+        return [f"{self.IncompleteTransactionsFile}_{i}.bin" for i in range(num_partitions)]
+
+    def _get_duration_seconds(self, start_date: Optional[datetime], end_date: Optional[datetime]) -> float:
+        if start_date and end_date:
+            return (end_date.replace(microsecond=0) - start_date.replace(microsecond=0)).total_seconds()
+        return 0.0
 
     def _process_single_transaction(self, transaction_id, records, pattern_mtrx):
         records_multisend = defaultdict(lambda: defaultdict(dict))
@@ -437,86 +345,58 @@ class ProcessorFiles:
         has_output_record = False
         has_flowctrl = False
         
-        result = {
-            'Transaction ID': transaction_id,
-            'Date Min': None,
-            'date_max': None,
-            'Priority': -1,
-            'first_action': None,
-            'first_subcomponent': None,
-            'Last Action': None,
-            'Last Subcomponent': None,
-            'countSend': 0,
-            'countMNewtrans': 0,
-            'date_in_collector': None,
-            'Duration': 0,
-            'duration_limsp': 0,
-            'NodeName': None,
-            'Filename': None,
-            'm_transaction_id': None
-        }
+        result = TransactionData(transaction_id=transaction_id)
 
         for record in records:
             timestamp = record['timestamp']
             action = record['action']
             subcomponent = record['subcomponent']
-            priority = record.get('priority', -1)
-            node_name = record.get('nodename')
-            file_name = record.get('filename')
             mtransaction_id = record.get('Mtransaction_id')
 
             if mtransaction_id:
-                result['countMNewtrans'] += 1
-                if result['countMNewtrans'] > 1:
-                    records_multisend[transaction_id][mtransaction_id].update({
-                        'm_transaction_id': mtransaction_id
-                    })
+                result.count_mnewtrans += 1
+                if result.count_mnewtrans > 1:
+                    records_multisend[transaction_id][mtransaction_id].update({'m_transaction_id': mtransaction_id})
                 else:
-                    result['m_transaction_id'] = mtransaction_id
+                    result.m_transaction_id = mtransaction_id
             else:
-                match_mtrx = pattern_mtrx.search(record.get('details', ''))
-                if match_mtrx:
+                if match_mtrx := pattern_mtrx.search(record.get('details', '')):
                     mtransaction_id = match_mtrx.group(1)
-                else:
-                    mtransaction_id = None
 
-            if priority != -1:
-                result['Priority'] = priority
+            if (priority := record.get('priority', -1)) != -1:
+                result.priority = priority
 
             if action == 'NEWTRANS':
-                result['Date Min'] = timestamp
-                result['first_action'] = action
-                result['first_subcomponent'] = subcomponent
-                result['NodeName'] = node_name
-                result['Filename'] = file_name
+                result.date_min = timestamp
+                result.first_action = action
+                result.first_subcomponent = subcomponent
+                result.node_name = record.get('nodename')
+                result.file_name = record.get('filename')
                 has_input_record = True
                 continue
 
             if action == 'SEND':
-                if mtransaction_id == result['m_transaction_id']:
-                    result['date_max'] = timestamp
-                    result['Last Action'] = action
-                    result['Last Subcomponent'] = subcomponent
-                    result['countSend'] += 1
+                result.count_send += 1
+                if mtransaction_id == result.m_transaction_id:
+                    result.date_max = timestamp
+                    result.last_action = action
+                    result.last_subcomponent = subcomponent
                     has_output_record = True
                 else:
-                    result['countSend'] += 1
                     records_multisend[transaction_id][mtransaction_id].update({
-                        'Transaction ID': transaction_id,
+                        'transaction_id': transaction_id,
                         'date_max': timestamp,
-                        'Last Action': action,
-                        'Last Subcomponent': subcomponent
+                        'last_action': action,
+                        'last_subcomponent': subcomponent
                     })
                 continue
 
             if action == 'OUT' and subcomponent == 'FailOverManager':
                 has_flowctrl = True
-                if mtransaction_id == result['m_transaction_id'] or result['countMNewtrans'] == 0:
-                    result['date_in_collector'] = timestamp
+                if mtransaction_id == result.m_transaction_id or result.count_mnewtrans == 0:
+                    result.date_in_collector = timestamp
                 else:
-                    records_multisend[transaction_id][mtransaction_id].update({
-                        'date_in_collector': timestamp
-                    })
+                    records_multisend[transaction_id][mtransaction_id].update({'date_in_collector': timestamp})
                 continue
         
         if transaction_id in records_multisend:
@@ -525,63 +405,46 @@ class ProcessorFiles:
             for m_id in m_ids_to_delete:
                 del m_records_dict[m_id]
 
-        final_result = None
         if has_input_record and has_output_record:
-            result['Duration'] = (result['date_max'].replace(microsecond=0) - result['Date Min'].replace(microsecond=0)).total_seconds()
+            result.duration = self._get_duration_seconds(result.date_min, result.date_max)
             if has_flowctrl:
-                result['duration_limsp'] = (result['date_in_collector'].replace(microsecond=0) - result['Date Min'].replace(microsecond=0)).total_seconds()
-            final_result = result.copy()
+                result.duration_limsp = self._get_duration_seconds(result.date_min, result.date_in_collector)
+            return asdict(result), records_multisend
         elif has_input_record:
-            result['Last Action'] = 'KO'
-            result['Last Subcomponent'] = 'KO'
-            result['countSend'] = 0
-            result['Duration'] = 0
-            result['duration_limsp'] = 0
-            result['date_max'] = None
-            final_result = result.copy()
+            result.last_action = 'KO'
+            result.last_subcomponent = 'KO'
+            return asdict(result), records_multisend
 
-        return final_result, records_multisend
+        return None, records_multisend
 
     def _calculate_multisend_durations(self, records_multisend, records_complete):
         if not records_multisend:
             return
 
-        trx_data = {
-            record['Transaction ID']: {
-                'Date Min': record['Date Min']
-            }
-            for record in records_complete
-        }
+        trx_data = {record['transaction_id']: {'date_min': record['date_min']} for record in records_complete}
 
         for transaction_id, m_records_dict in records_multisend.items():
             if transaction_id not in trx_data:
                 self.logger.warning(f"Transaction ID {transaction_id} not found in trx_data. Skipping multisend record.")
                 continue
 
-            date_min = trx_data[transaction_id]['Date Min']
+            date_min = trx_data[transaction_id]['date_min']
             for record_data in m_records_dict.values():
                 try:
-                    if isinstance(record_data.get('date_max'), str):
-                        record_data['date_max'] = datetime.strptime(record_data['date_max'], "%Y/%m/%d %H:%M:%S.%f")
-                    
-                    if isinstance(record_data.get('date_in_collector'), str):
-                        record_data['date_in_collector'] = datetime.strptime(record_data['date_in_collector'], "%Y/%m/%d %H:%M:%S.%f")
-                    
-                    if record_data.get('date_max'):
-                        duration = (record_data['date_max'] - date_min).total_seconds()
-                        record_data['Duration'] = duration
-                    else:
-                        record_data['Duration'] = 0
+                    date_max = record_data.get('date_max')
+                    date_in_collector = record_data.get('date_in_collector')
 
-                    if record_data.get('date_in_collector'):
-                        duration_limsp = (record_data['date_in_collector'].replace(microsecond=0) - date_min).total_seconds()
-                        record_data['duration_limsp'] = duration_limsp
-                    else:
-                        record_data['duration_limsp'] = 0
+                    if isinstance(date_max, str):
+                        date_max = datetime.strptime(date_max, "%Y/%m/%d %H:%M:%S.%f")
+                    if isinstance(date_in_collector, str):
+                        date_in_collector = datetime.strptime(date_in_collector, "%Y/%m/%d %H:%M:%S.%f")
+
+                    record_data['duration'] = self._get_duration_seconds(date_min, date_max)
+                    record_data['duration_limsp'] = self._get_duration_seconds(date_min, date_in_collector)
                 
                 except (TypeError, ValueError) as e:
                     self.logger.error(f"Could not calculate duration for record {record_data.get('m_transaction_id')}: {e}")
-                    record_data['Duration'] = 0
+                    record_data['duration'] = 0
                     record_data['duration_limsp'] = 0
 
     def process_transactions(self, data_line):
@@ -596,7 +459,7 @@ class ProcessorFiles:
                 records_complete.append(result)
 
             if records_multisend_single:
-                for m_id, m_records in records_multisend_single[transaction_id].items():
+                for m_id, m_records in records_multisend_single.get(transaction_id, {}).items():
                     records_multisend_total[transaction_id][m_id].update(m_records)
 
         self._calculate_multisend_durations(records_multisend_total, records_complete)
@@ -604,38 +467,16 @@ class ProcessorFiles:
         return records_complete, records_multisend_total
     
     def write_in_threads(self, processed_data, records_multisend):
-        """
-        Inicia hilos para escribir datos procesados y registros multisend.
-        La validación de processed_data se hace antes de llamar a este método.
-        
-        Args:
-            processed_data (list): Lista de transacciones procesadas
-            records_multisend (dict): Diccionario de registros multisend
-        """
         threads = []
-        
-        # Crear hilo para datos procesados (sin validación)
-        thread_complete = threading.Thread(
-            target=self.write_result_to_csv,
-            args=(processed_data,),
-            daemon=True
-        )
+        thread_complete = threading.Thread(target=self.write_result_to_csv, args=(processed_data,), daemon=True)
         threads.append(thread_complete)
 
-        # Crear hilo para multisend solo si hay datos
         if records_multisend:
-            thread_multisend = threading.Thread(
-                target=self.write_multisend_to_csv,
-                args=(records_multisend,),
-                daemon=True
-            )
+            thread_multisend = threading.Thread(target=self.write_multisend_to_csv, args=(records_multisend,), daemon=True)
             threads.append(thread_multisend)
 
-        # Iniciar todos los hilos
         for thread in threads:
             thread.start()
-
-        # Esperar a que todos los hilos terminen
         for thread in threads:
             thread.join()
 
@@ -646,25 +487,14 @@ class ProcessorFiles:
                 return
             
             self.logger.debug(f"Se inicia escritura de transacciones al archivo binario. {len(records_complete)}")
-            fieldnames = [
-            'Transaction ID', 'Date Min', 'date_max', 'Priority',
-            'first_action', 'first_subcomponent', 'Last Action', 
-            'Last Subcomponent', 'countSend', 'date_in_collector', 
-            'Duration', 'duration_limsp', 'NodeName', 'Filename', 
-            'm_transaction_id'
-            ]
+            fieldnames = [f.name for f in fields(TransactionData)]
             
-            with self.csv_lock:  # Bloqueo para evitar condiciones de carrera
-                # Abrir archivo en modo append
+            with self.csv_lock:
                 with open(self.resultFinalFile, 'a', newline='', encoding='utf-8') as csv_file:
                     writer = csv.DictWriter(csv_file, fieldnames=fieldnames, extrasaction='ignore')
-
-                    # Escribir encabezado solo una vez
                     if not self.csv_initialized:
                         writer.writeheader()
                         self.csv_initialized = True
-
-                    # Escribir los registros en bloques
                     writer.writerows(records_complete)
 
                 self.logger.info(f"{len(records_complete)} transacciones escritas en CSV")
@@ -674,12 +504,6 @@ class ProcessorFiles:
             self.logger.error(f"Error al escribir CSV: {e}")
 
     def write_multisend_to_csv(self, records_multisend):
-        """
-        Escribe los registros de multisend en un archivo CSV separado.
-        
-        Args:
-            records_multisend (dict): Diccionario con registros de envíos múltiples
-        """
         try:
             if not records_multisend:
                 self.logger.debug('No hay transacciones multisend para escribir.')
@@ -688,42 +512,22 @@ class ProcessorFiles:
             multisend_file = self.resultFinalFile.replace('.csv', '_multisend.csv')
             self.logger.debug(f"Se inicia escritura de transacciones multisend. Total IDs: {len(records_multisend)}")
 
-            csv_headers = [
-                'Transaction ID', 'Date Min', 'date_max', 'Priority', 'first_action', 
-                'first_subcomponent', 'Last Action', 'Last Subcomponent', 'countSend', 
-                'date_in_collector', 'Duration', 'duration_limsp', 'NodeName', 
-                'Filename', 'm_transaction_id'
-            ]
-            # Usamos un contador para llevar la cuenta de las filas reales escritas
+            csv_headers = [f.name for f in fields(TransactionData)]
             rows_written = 0
 
-            with self.csv_lock:                
+            with self.csv_lock:
                 with open(multisend_file, 'a', newline='', encoding='utf-8') as csv_file:
                     writer = csv.DictWriter(csv_file, fieldnames=csv_headers)
-
-                    # Escribir encabezado si el archivo es nuevo/está vacío
                     if csv_file.tell() == 0:
                         writer.writeheader()
 
-                    # 2. Iteramos sobre la estructura anidada para escribir los datos
-                    # Bucle Externo: no cambia
                     for transaction_id, m_records_dict in records_multisend.items():
-                        
-                        # Bucle Interno: usamos .items() para obtener la clave y el valor
-                        # 'm_id' será la clave (ej: 'UNO51...oY4')
-                        # 'record_data' será el diccionario con los datos de la fila
-                        for m_id, record_data in m_records_dict.items():                            
-                            # 3. El Truco Clave: Añadimos el m_transaction_id al diccionario
-                            #    justo antes de escribirlo. DictWriter ahora encontrará este campo.
-                            #    Esto cumple tu requisito de usar el ÍNDICE y no un campo interno.
+                        for m_id, record_data in m_records_dict.items():
                             record_data['m_transaction_id'] = m_id
-                            
-                            # 4. Escribimos la fila individualmente.
-                            #    Esto es más eficiente en memoria que crear una lista grande.
                             writer.writerow(record_data)
                             rows_written += 1
 
-            self.logger.info(f"Registros (filas) multisend escritos: {rows_written}")            
+            self.logger.info(f"Registros (filas) multisend escritos: {rows_written}")
 
         except Exception as e:
             self.logger.error(f"Error escribiendo registros multisend: {str(e)}")
@@ -733,123 +537,74 @@ class ProcessorFiles:
             with open(file_path, 'r', encoding='utf-8') as file:
                 for line_num, line in enumerate(file, 1):
                     try:
-                        processed_line = self.process_log_line(line)
-                        if processed_line:
+                        if processed_line := self.process_log_line(line):
                             yield processed_line
                     except Exception as e:
-                        self.loggerfiles.error(
-                            f'Error procesando línea {line_num} en {file_path}:\n'
-                            f'Línea: {line[:200]}...\n'  # Primeros 200 caracteres
-                            f'Error: {str(e)}'
-                        )
+                        self.loggerfiles.error(f'Error procesando línea {line_num} en {file_path}:\nLínea: {line[:200]}...\nError: {str(e)}')
         except Exception as e:
-            self.loggerfiles.error(
-                f'Error abriendo archivo {file_path}:\n'
-                f'Error: {str(e)}'
-            )
+            self.loggerfiles.error(f'Error abriendo archivo {file_path}:\nError: {str(e)}')
             raise
 
     def process_log_line(self, line):
         try:
-            transaction_pattern = r"(transaction:)([^ ]*)"
-            priority_pattern = r"pri:(\d+)"
-            match = self.pattern.match(line)            
+            if not (match := self.pattern.match(line)):
+                return None
 
-            if (match):
-                details = match.groupdict()
-                action = details['action']
-                subcomponent = details['subcomponent']
-                if action not in self.valid_actions :
-                    if subcomponent not in self.valid_subcomponents :                
-                        return None                
-                    elif action != 'OUT' :
-                            return None  
+            details = match.groupdict()
+            action = details['action']
+            subcomponent = details['subcomponent']
+            
+            if action not in self.valid_actions and (subcomponent not in self.valid_subcomponents or action != 'OUT'):
+                return None
 
-                # Filtrar si el action no está en valid_actions y el subcomponent no está en valid_subcomponents
-                '''if action not in self.valid_actions and  subcomponent not in self.valid_subcomponents:
-                    return None
-                
-                if subcomponent not in self.valid_subcomponents and action != 'OUT' :
-                    if action not in self.valid_actions :
-                        return None'''
+            transaction_matches = list(re.finditer(r"transaction:([^ ]*)", details['details']))
+            if not transaction_matches:
+                return None
 
-                transaction_matches = re.finditer(transaction_pattern, details['details'])
-                transaction_ids = []
-                for transaction_match in transaction_matches:
-                    transaction_id = transaction_match.group(2)
-                    transaction_ids.append(transaction_id)
+            details['transaction_id'] = transaction_matches[0].group(1)
+            if len(transaction_matches) > 1:
+                details['Mtransaction_id'] = transaction_matches[1].group(1)
+            else:
+                details['Mtransaction_id'] = None
 
-                if len(transaction_ids) >= 1:
-                    details['transaction_id'] = transaction_ids[0]
-                else:
-                    details['transaction_id'] = None
-                    return None
+            if priority_match := re.search(r"pri:(\d+)", details['details']):
+                details['priority'] = int(priority_match.group(1))
+            else:
+                details['priority'] = -1
 
-                if len(transaction_ids) >= 2:
-                    details['Mtransaction_id'] = transaction_ids[1]
-                else:
-                    details['Mtransaction_id'] = None            
+            timestamp_str = details['timestamp']
+            if '.' in timestamp_str:
+                details['timestamp'] = datetime.strptime(timestamp_str, "%Y/%m/%d %H:%M:%S.%f")
+            else:
+                details['timestamp'] = datetime.strptime(timestamp_str, "%Y/%m/%d %H:%M:%S")
 
-                priority_match = re.search(priority_pattern, details['details'])
-                if priority_match:
-                    details['priority'] = int(priority_match.group(1))
-                else:
-                    details['priority'] = -1
-
-                if '.' in details['timestamp']:
-                    details['timestamp'] = datetime.strptime(details['timestamp'], "%Y/%m/%d %H:%M:%S.%f")
-                else:
-                    details['timestamp'] = datetime.strptime(details['timestamp'], "%Y/%m/%d %H:%M:%S")
-
-                return details
-
-            return None
+            return details
         except Exception as e:
-            self.loggerfiles.error(
-                f'Error en process_log_line:\n'
-                f'Línea: {line[:200]}...\n'
-                f'Error: {str(e)}'
-            )
+            self.loggerfiles.error(f'Error en process_log_line:\nLínea: {line[:200]}...\nError: {str(e)}')
             return None
 
     def write_dataconfig(self):
-        self.logger.info("VERSION 6.9.0")
+        self.logger.info("VERSION 7.0.0")
         self.logger.info(f"inputPath: {self.inputFile}")
         self.logger.info(f"filePattern: {self.filePattern}")
         self.logger.info(f"ResultFinalFile: {self.resultFinalFile}")
-        self.logger.info(f"Binarios: {self.IncompleteTransactionsFile}")        
-        self.logger.info(f"chunk_size: {self.chunk_size}") 
+        self.logger.info(f"Binarios: {self.IncompleteTransactionsFile}")
+        self.logger.info(f"chunk_size: {self.chunk_size}")
         self.logger.info(f"timeToLog: {self.timeToLog}")
         self.logger.info(f"num_partitions: {self.num_partitions}")
-        self.logger.info(f"valid_actions: {self.valid_actions}") 
+        self.logger.info(f"valid_actions: {self.valid_actions}")
         self.logger.info(f"valid_subcomponents: {self.valid_subcomponents}")
         self.logger.info(f"file_order_patterns: {self.order_patterns}")
-        self.logger.info(f"log_pattern: {self.log_pattern_str}") 
-        
+        self.logger.info(f"log_pattern: {self.log_pattern_str}")
 
-    '''def monitor_resources(self):
-        import psutil
-        process = psutil.Process()
-        memory_info = process.memory_info()
-        
-        self.logger.debug(
-            f"Uso de memoria: {memory_info.rss / 1024 / 1024:.2f} MB\n"
-            f"Buffers: {sum(len(b) for b in self.partition_buffers.values())} registros\n"
-            f"FailOver records: {len(self.first_fo_records)} registros"
-        )'''
-      
 if __name__ == "__main__":
-    processed_data = []  # Lista para almacenar los resultados finales
-    records_multisend = {}  # Diccionario para almacenar los registros de multisend
-
     try:
-        manager = ProcessorFiles('./config/config.ini')        
-        logging.info("Iniciando proceso.. ")
-        
+        manager = ProcessorFiles('./config/config.ini')
+        logging.info("Iniciando proceso..")
         manager.compile_regular_expression()
         manager.write_dataconfig()
         manager.process_log_files()
-            
+        
         partition_file_names = manager.get_partition_file_names(manager.num_partitions)
         partitions_not_found = 0
         partitions_processed = 0
@@ -860,32 +615,25 @@ if __name__ == "__main__":
                     partitions_not_found += 1
                     manager.logger.warning(f"Partición no encontrada: {partition_file}")
                     continue
-                    
+                
                 data_line = manager.process_partition_file(partition_file)
-                if not data_line:  # Si no hay datos en la partición
+                if not data_line:
                     manager.logger.debug(f"Partición vacía: {partition_file}")
                     continue
-                    
+                
                 processed_data, records_multisend = manager.process_transactions(data_line)
-                if processed_data:  # Si hay transacciones para escribir
+                if processed_data:
                     manager.logger.debug(f"Partición {partition_file} procesada. Inicia proceso de escritura")
-                    manager.write_in_threads(processed_data,records_multisend)
+                    manager.write_in_threads(processed_data, records_multisend)
                     partitions_processed += 1
                 
-                # Liberación explícita de memoria
-                del data_line
-                del processed_data
-                del records_multisend
-                gc.collect()  # Forzar recolección de basura periódicamente
-                
-                # Reinicializar variables
-                processed_data = []
-                records_multisend = {}
+                del data_line, processed_data, records_multisend
+                gc.collect()
 
             except Exception as e:
                 manager.logger.error(f"Error procesando partición {partition_file}: {str(e)}")
 
-        manager.logger.info(f"Resumen de particiones:")
+        manager.logger.info("Resumen de particiones:")
         manager.logger.info(f"- Particiones procesadas: {partitions_processed}")
         manager.logger.info(f"- Particiones no encontradas: {partitions_not_found}")
         manager.logger.info(f"- Particiones totales esperadas: {manager.num_partitions}")
@@ -893,11 +641,12 @@ if __name__ == "__main__":
     except Exception as e:
         logging.error(f"An error occurred: {e}")
     finally:
-        end_time = time.time()
-        total_time = end_time - manager.start_time
-        logging.info(f"Se escriben {manager.count_trx_complete} transacciones completas")
-        logging.info(f"Se descartan {manager.count_incomplete_write} transacciones")
-        if total_time > 3600 :
-            logging.info(f"Tiempo total: {total_time / 3600:.2f} horas.")
-        else:
-            logging.info(f"Tiempo total: {total_time / 60 :.2f} minutos.")
+        if 'manager' in locals() and manager.start_time:
+            end_time = time.time()
+            total_time = end_time - manager.start_time
+            logging.info(f"Se escriben {manager.count_trx_complete} transacciones completas")
+            logging.info(f"Se descartan {manager.count_incomplete_write} transacciones")
+            if total_time > 3600:
+                logging.info(f"Tiempo total: {total_time / 3600:.2f} horas.")
+            else:
+                logging.info(f"Tiempo total: {total_time / 60:.2f} minutos.")
