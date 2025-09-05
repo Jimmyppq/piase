@@ -542,6 +542,48 @@ class ProcessorFiles:
 
         return final_result, records_multisend
 
+    def _calculate_multisend_durations(self, records_multisend, records_complete):
+        if not records_multisend:
+            return
+
+        trx_data = {
+            record['Transaction ID']: {
+                'Date Min': record['Date Min']
+            }
+            for record in records_complete
+        }
+
+        for transaction_id, m_records_dict in records_multisend.items():
+            if transaction_id not in trx_data:
+                self.logger.warning(f"Transaction ID {transaction_id} not found in trx_data. Skipping multisend record.")
+                continue
+
+            date_min = trx_data[transaction_id]['Date Min']
+            for record_data in m_records_dict.values():
+                try:
+                    if isinstance(record_data.get('date_max'), str):
+                        record_data['date_max'] = datetime.strptime(record_data['date_max'], "%Y/%m/%d %H:%M:%S.%f")
+                    
+                    if isinstance(record_data.get('date_in_collector'), str):
+                        record_data['date_in_collector'] = datetime.strptime(record_data['date_in_collector'], "%Y/%m/%d %H:%M:%S.%f")
+                    
+                    if record_data.get('date_max'):
+                        duration = (record_data['date_max'] - date_min).total_seconds()
+                        record_data['Duration'] = duration
+                    else:
+                        record_data['Duration'] = 0
+
+                    if record_data.get('date_in_collector'):
+                        duration_limsp = (record_data['date_in_collector'].replace(microsecond=0) - date_min).total_seconds()
+                        record_data['duration_limsp'] = duration_limsp
+                    else:
+                        record_data['duration_limsp'] = 0
+                
+                except (TypeError, ValueError) as e:
+                    self.logger.error(f"Could not calculate duration for record {record_data.get('m_transaction_id')}: {e}")
+                    record_data['Duration'] = 0
+                    record_data['duration_limsp'] = 0
+
     def process_transactions(self, data_line):
         records_multisend_total = defaultdict(lambda: defaultdict(dict))
         records_complete = []
@@ -557,43 +599,7 @@ class ProcessorFiles:
                 for m_id, m_records in records_multisend_single[transaction_id].items():
                     records_multisend_total[transaction_id][m_id].update(m_records)
 
-        if records_multisend_total:
-            trx_data = {
-                record['Transaction ID']: {
-                    'Date Min': record['Date Min']
-                }
-                for record in records_complete
-            }
-            for transaction_id, m_records_dict in records_multisend_total.items():
-                if transaction_id in trx_data:
-                    date_min = trx_data[transaction_id]['Date Min']
-                    for record_data in m_records_dict.values():
-                        try:
-                            if isinstance(record_data.get('date_max'), str):
-                                record_data['date_max'] = datetime.strptime(record_data['date_max'], "%Y/%m/%d %H:%M:%S.%f")
-                            
-                            if isinstance(record_data.get('date_in_collector'), str):
-                                record_data['date_in_collector'] = datetime.strptime(record_data['date_in_collector'], "%Y/%m/%d %H:%M:%S.%f")
-                            
-                            if record_data.get('date_max'):
-                                duration = (record_data['date_max'].replace(microsecond=0) - date_min.replace(microsecond=0)).total_seconds()
-                                record_data['Duration'] = duration
-                            else:
-                                record_data['Duration'] = 0
-
-                            if record_data.get('date_in_collector'):
-                                duration_limsp = (record_data['date_in_collector'].replace(microsecond=0) - date_min.replace(microsecond=0)).total_seconds()
-                                record_data['duration_limsp'] = duration_limsp
-                            else:
-                                record_data['duration_limsp'] = 0
-                        
-                        except (TypeError, ValueError) as e:
-                            self.logger.error(f"Could not calculate duration for record {record_data.get('m_transaction_id')}: {e}")
-                            record_data['Duration'] = 0
-                            record_data['duration_limsp'] = 0
-                else:
-                    self.logger.warning(f"Transaction ID {transaction_id} not found in trx_data. Skipping multisend record.")
-                    continue
+        self._calculate_multisend_durations(records_multisend_total, records_complete)
 
         return records_complete, records_multisend_total
     
@@ -807,7 +813,7 @@ class ProcessorFiles:
             return None
 
     def write_dataconfig(self):
-        self.logger.info("VERSION 6.8.0")
+        self.logger.info("VERSION 6.9.0")
         self.logger.info(f"inputPath: {self.inputFile}")
         self.logger.info(f"filePattern: {self.filePattern}")
         self.logger.info(f"ResultFinalFile: {self.resultFinalFile}")
