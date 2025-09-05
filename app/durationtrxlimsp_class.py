@@ -431,192 +431,171 @@ class ProcessorFiles:
 
         return partition_files
 
-    def process_transactions(self, data_line):
-          
-        # El defaultdict externo crea un defaultdict(dict) cuando una clave no existe.
+    def _process_single_transaction(self, transaction_id, records, pattern_mtrx):
         records_multisend = defaultdict(lambda: defaultdict(dict))
+        has_input_record = False
+        has_output_record = False
+        has_flowctrl = False
         
+        result = {
+            'Transaction ID': transaction_id,
+            'Date Min': None,
+            'date_max': None,
+            'Priority': -1,
+            'first_action': None,
+            'first_subcomponent': None,
+            'Last Action': None,
+            'Last Subcomponent': None,
+            'countSend': 0,
+            'countMNewtrans': 0,
+            'date_in_collector': None,
+            'Duration': 0,
+            'duration_limsp': 0,
+            'NodeName': None,
+            'Filename': None,
+            'm_transaction_id': None
+        }
+
+        for record in records:
+            timestamp = record['timestamp']
+            action = record['action']
+            subcomponent = record['subcomponent']
+            priority = record.get('priority', -1)
+            node_name = record.get('nodename')
+            file_name = record.get('filename')
+            mtransaction_id = record.get('Mtransaction_id')
+
+            if mtransaction_id:
+                result['countMNewtrans'] += 1
+                if result['countMNewtrans'] > 1:
+                    records_multisend[transaction_id][mtransaction_id].update({
+                        'm_transaction_id': mtransaction_id
+                    })
+                else:
+                    result['m_transaction_id'] = mtransaction_id
+            else:
+                match_mtrx = pattern_mtrx.search(record.get('details', ''))
+                if match_mtrx:
+                    mtransaction_id = match_mtrx.group(1)
+                else:
+                    mtransaction_id = None
+
+            if priority != -1:
+                result['Priority'] = priority
+
+            if action == 'NEWTRANS':
+                result['Date Min'] = timestamp
+                result['first_action'] = action
+                result['first_subcomponent'] = subcomponent
+                result['NodeName'] = node_name
+                result['Filename'] = file_name
+                has_input_record = True
+                continue
+
+            if action == 'SEND':
+                if mtransaction_id == result['m_transaction_id']:
+                    result['date_max'] = timestamp
+                    result['Last Action'] = action
+                    result['Last Subcomponent'] = subcomponent
+                    result['countSend'] += 1
+                    has_output_record = True
+                else:
+                    result['countSend'] += 1
+                    records_multisend[transaction_id][mtransaction_id].update({
+                        'Transaction ID': transaction_id,
+                        'date_max': timestamp,
+                        'Last Action': action,
+                        'Last Subcomponent': subcomponent
+                    })
+                continue
+
+            if action == 'OUT' and subcomponent == 'FailOverManager':
+                has_flowctrl = True
+                if mtransaction_id == result['m_transaction_id'] or result['countMNewtrans'] == 0:
+                    result['date_in_collector'] = timestamp
+                else:
+                    records_multisend[transaction_id][mtransaction_id].update({
+                        'date_in_collector': timestamp
+                    })
+                continue
+        
+        if transaction_id in records_multisend:
+            m_records_dict = records_multisend[transaction_id]
+            m_ids_to_delete = [m_id for m_id, record_data in m_records_dict.items() if 'date_max' not in record_data]
+            for m_id in m_ids_to_delete:
+                del m_records_dict[m_id]
+
+        final_result = None
+        if has_input_record and has_output_record:
+            result['Duration'] = (result['date_max'].replace(microsecond=0) - result['Date Min'].replace(microsecond=0)).total_seconds()
+            if has_flowctrl:
+                result['duration_limsp'] = (result['date_in_collector'].replace(microsecond=0) - result['Date Min'].replace(microsecond=0)).total_seconds()
+            final_result = result.copy()
+        elif has_input_record:
+            result['Last Action'] = 'KO'
+            result['Last Subcomponent'] = 'KO'
+            result['countSend'] = 0
+            result['Duration'] = 0
+            result['duration_limsp'] = 0
+            result['date_max'] = None
+            final_result = result.copy()
+
+        return final_result, records_multisend
+
+    def process_transactions(self, data_line):
+        records_multisend_total = defaultdict(lambda: defaultdict(dict))
         records_complete = []
+        pattern_mtrx = re.compile(r"transaction:(\S+)")
 
         for transaction_id, records in data_line.items():
-            flowctrl = False
-            trx_in = False #indica si la transacción tiene un rastro de entrada (NEWTRANS O MNEWTRANS)
-            trx_out = False #indica si la transacción tiene un rastro de salida (SEND)     
-            result = {
-                'Transaction ID': transaction_id,
-                'Date Min': None,
-                'date_max': None,
-                'Priority': -1,
-                'first_action': None,
-                'first_subcomponent': None,
-                'Last Action': None,
-                'Last Subcomponent': None,
-                'countSend': 0,
-                'countMNewtrans':0,
-                'date_in_collector': None,
-                'Duration': 0,
-                'duration_limsp': 0,
-                'NodeName': None,
-                'Filename': None,
-                'm_transaction_id': None
-            }
-
-            for record in records:
-                timestamp = record['timestamp']
-                action = record['action']
-                subcomponent = record['subcomponent']
-                priority = record.get('priority', -1)
-                node_name = record.get('nodename')
-                file_name = record.get('filename')
-                mtransaction_id = record.get('Mtransaction_id')
-
-                if mtransaction_id :
-                    result['countMNewtrans'] +=1
-                    if result['countMNewtrans'] > 1:
-                        records_multisend[transaction_id][mtransaction_id].update({
-                            'm_transaction_id': mtransaction_id
-                        })
-                    else:
-                        result['m_transaction_id'] = mtransaction_id
-                
-                else:
-                    pattern_mtrx = r"transaction:(\S+)"
-                    match_mtrx = re.search(pattern_mtrx, record.get('details'))
-                    if match_mtrx:
-                        # Si se encontró el patrón, el grupo 1 contiene nuestro ID
-                        mtransaction_id = match_mtrx.group(1)
-                    else:
-                        mtransaction_id = None
-               
-                if priority != -1:
-                    result['Priority'] = priority
-                
-                if action == 'NEWTRANS':
-                    result['Date Min'] = timestamp
-                    result['first_action'] = action
-                    result['first_subcomponent'] = subcomponent
-                    result['NodeName']= node_name
-                    result['Filename'] = file_name      
-                    trx_in = True
-                    continue
-                      
-                if action == 'SEND':                    
-                    if mtransaction_id == result['m_transaction_id']:                                                                      
-                        result['date_max'] = timestamp
-                        result['Last Action'] = action
-                        result['Last Subcomponent'] = subcomponent
-                        result['countSend'] += 1
-                        trx_out = True                                                                                     
-                    else:
-                        result['countSend'] +=1
-                        # Accedemos al registro específico usando ambos IDs y lo actualizamos
-                        records_multisend[transaction_id][mtransaction_id].update({
-                            'Transaction ID': transaction_id,
-                            'date_max': timestamp,
-                            'Last Action': action,
-                            'Last Subcomponent': subcomponent
-                        })
-                                                                    
-                    continue
-
-                if action == 'OUT' and subcomponent == 'FailOverManager' :
-                    flowctrl = True
-                    if mtransaction_id == result['m_transaction_id'] or result['countMNewtrans'] == 0:                                       
-                        result['date_in_collector'] = timestamp
-                    else:
-                         records_multisend[transaction_id][mtransaction_id].update({
-                            'date_in_collector': timestamp
-                        })                                                       
-                    continue
-
-            if transaction_id in records_multisend:
-                # Obtenemos una referencia al diccionario interno para trabajar con él.
-                m_records_dict = records_multisend[transaction_id]
-                # Lista para recolectar los sub-registros que no cumplan la condición
-                m_ids_to_delete = []
-
-                # 2. Iteramos sobre los sub-registros para encontrar los que no tienen 'date_max'.
-                #    Usamos .items() para obtener tanto la clave (m_id) como el diccionario de datos.
-                for m_id, record_data in m_records_dict.items():
-                    if 'date_max' not in record_data:
-                        # 3. "Marcamos" el sub-registro para su eliminación.
-                        m_ids_to_delete.append(m_id)
-
-                 # 4. Una vez terminado el bucle, eliminamos de forma segura los registros marcados.
-                if m_ids_to_delete:                    
-                    for m_id in m_ids_to_delete:
-                        del m_records_dict[m_id]
+            result, records_multisend_single = self._process_single_transaction(transaction_id, records, pattern_mtrx)
             
-            #Si la transacción tiene un ciclo completo (entrada y salida) calcular duraciones y añadirlo a una lista para posteriormente escribirlo a disco
-            if trx_in and trx_out :
-                result['Duration'] = (result['date_max'] - result['Date Min']).total_seconds()
-                if flowctrl :
-                    result['duration_limsp'] = (result['date_in_collector'].replace(microsecond=0) - result['Date Min']).total_seconds()
-                #result['NodeName'] = records[0]['nodename']
-                #result['Filename'] = records[0]['filename']              
-                records_complete.append(result.copy())      
-            elif trx_in :
-                #Si la transacción termina solo con NEWTRANS se incluye bajo las siguientes convenciones
-                result['Last Action'] = 'KO'
-                result['Last Subcomponent'] = 'KO'
-                result['countSend'] = 0
-                #result['date_in_collector'] = None
-                result['Duration'] = 0
-                result['duration_limsp'] = 0
-                result['date_max'] = None
-                records_complete.append(result.copy())
-                                
-            result.clear()            
-            flowctrl = False            
-            trx_out = False
-            trx_in = False
+            if result:
+                records_complete.append(result)
 
-        if records_multisend:
+            if records_multisend_single:
+                for m_id, m_records in records_multisend_single[transaction_id].items():
+                    records_multisend_total[transaction_id][m_id].update(m_records)
+
+        if records_multisend_total:
             trx_data = {
                 record['Transaction ID']: {
                     'Date Min': record['Date Min']
                 }
                 for record in records_complete
             }
-            for transaction_id, m_records_dict in records_multisend.items():
+            for transaction_id, m_records_dict in records_multisend_total.items():
                 if transaction_id in trx_data:
                     date_min = trx_data[transaction_id]['Date Min']
                     for record_data in m_records_dict.values():
                         try:
-                            # Convertir date_max a datetime si no lo está ya
                             if isinstance(record_data.get('date_max'), str):
                                 record_data['date_max'] = datetime.strptime(record_data['date_max'], "%Y/%m/%d %H:%M:%S.%f")
                             
-                            if isinstance(record_data.get('date_in_collector'),str):
-                               record_data['date_in_collector'] = datetime.strptime(record_data['date_in_collector'], "%Y/%m/%d %H:%M:%S.%f") 
+                            if isinstance(record_data.get('date_in_collector'), str):
+                                record_data['date_in_collector'] = datetime.strptime(record_data['date_in_collector'], "%Y/%m/%d %H:%M:%S.%f")
                             
-                            # Asegurarnos que tenemos un date_max válido antes de calcular
                             if record_data.get('date_max'):
-                                # Calcular duration como la diferencia entre date_max y Date Min
-                                duration = (record_data['date_max'] - date_min).total_seconds()
+                                duration = (record_data['date_max'].replace(microsecond=0) - date_min.replace(microsecond=0)).total_seconds()
                                 record_data['Duration'] = duration
                             else:
-                                # Opcional: manejar el caso donde una fila no tiene 'date_max'
-                                record_data['Duration'] = 0 
+                                record_data['Duration'] = 0
 
                             if record_data.get('date_in_collector'):
-                                # Calcular duration_limsp como la diferencia entre date_in_collector y Date Min
-                                duration = (record_data['date_in_collector'].replace(microsecond=0) - date_min).total_seconds()
-                                record_data['duration_limsp'] = duration
+                                duration_limsp = (record_data['date_in_collector'].replace(microsecond=0) - date_min.replace(microsecond=0)).total_seconds()
+                                record_data['duration_limsp'] = duration_limsp
                             else:
-                                # Opcional: manejar el caso donde una fila no tiene 'date_max'
-                                record_data['duration_limsp'] = 0 
+                                record_data['duration_limsp'] = 0
                         
                         except (TypeError, ValueError) as e:
-                            # Opcional pero recomendado: Manejar errores si las fechas no son válidas
-                            # print(f"No se pudo calcular la duración para el registro {record_data.get('m_transaction_id')}: {e}")
-                            record_data['duration'] = 0
+                            self.logger.error(f"Could not calculate duration for record {record_data.get('m_transaction_id')}: {e}")
+                            record_data['Duration'] = 0
                             record_data['duration_limsp'] = 0
                 else:
                     self.logger.warning(f"Transaction ID {transaction_id} not found in trx_data. Skipping multisend record.")
                     continue
 
-        return records_complete, records_multisend
+        return records_complete, records_multisend_total
     
     def write_in_threads(self, processed_data, records_multisend):
         """
@@ -828,7 +807,7 @@ class ProcessorFiles:
             return None
 
     def write_dataconfig(self):
-        self.logger.info("VERSION 6.7.3.5")
+        self.logger.info("VERSION 6.8.0")
         self.logger.info(f"inputPath: {self.inputFile}")
         self.logger.info(f"filePattern: {self.filePattern}")
         self.logger.info(f"ResultFinalFile: {self.resultFinalFile}")
