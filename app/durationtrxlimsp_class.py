@@ -551,7 +551,7 @@ class ProcessorFiles:
             if trx_in and trx_out :
                 result['Duration'] = (result['date_max'] - result['Date Min']).total_seconds()
                 if flowctrl :
-                    result['duration_limsp'] = (result['date_in_collector'] - result['Date Min']).total_seconds()
+                    result['duration_limsp'] = (result['date_in_collector'].replace(microsecond=0) - result['Date Min']).total_seconds()
                 #result['NodeName'] = records[0]['nodename']
                 #result['Filename'] = records[0]['filename']              
                 records_complete.append(result.copy())      
@@ -560,10 +560,10 @@ class ProcessorFiles:
                 result['Last Action'] = 'KO'
                 result['Last Subcomponent'] = 'KO'
                 result['countSend'] = 0
-                result['date_in_collector'] = None
+                #result['date_in_collector'] = None
                 result['Duration'] = 0
                 result['duration_limsp'] = 0
-                result['date_max'] = result['Date Min']
+                result['date_max'] = None
                 records_complete.append(result.copy())
                                 
             result.clear()            
@@ -601,7 +601,7 @@ class ProcessorFiles:
 
                             if record_data.get('date_in_collector'):
                                 # Calcular duration_limsp como la diferencia entre date_in_collector y Date Min
-                                duration = (record_data['date_in_collector'] - date_min).total_seconds()
+                                duration = (record_data['date_in_collector'].replace(microsecond=0) - date_min).total_seconds()
                                 record_data['duration_limsp'] = duration
                             else:
                                 # Opcional: manejar el caso donde una fila no tiene 'date_max'
@@ -828,7 +828,7 @@ class ProcessorFiles:
             return None
 
     def write_dataconfig(self):
-        self.logger.info("VERSION 6.7.3.4")
+        self.logger.info("VERSION 6.7.3.5")
         self.logger.info(f"inputPath: {self.inputFile}")
         self.logger.info(f"filePattern: {self.filePattern}")
         self.logger.info(f"ResultFinalFile: {self.resultFinalFile}")
